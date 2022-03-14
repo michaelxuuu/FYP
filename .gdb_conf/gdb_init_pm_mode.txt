@@ -1,0 +1,32 @@
+set confirm off
+set verbose off
+set prompt \033[31mpm-mode-gdb > \033[0m
+
+set output-radix 0d10
+set input-radix 0d10
+
+# These make gdb never pause in its output
+set height 0
+set width 0
+
+# Intel syntax
+set disassembly-flavor intel
+
+define hook-stop
+  display_instr
+end
+
+set $CODE_SIZE = 10
+
+
+define display_instr
+    set $_code_size = $CODE_SIZE
+    if ($_code_size > 0)
+        x /i $eip
+        set $_code_size--
+    end
+    while ($_code_size > 0)
+        x /i
+        set $_code_size--
+    end
+end
