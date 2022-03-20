@@ -18,7 +18,7 @@ debug32asm: vhd boot_sect.elf kernel.elf
 	i386-elf-gdb -ix ".gdb_conf/gdb_init_pm_mode.txt" \
 			     -ex "target extended-remote localhost:1234" \
 				 -ex "symbol-file kernel.elf" \
-				 -ex "br init32" \
+				 -ex "br *0x40000000+init32" \
 
 debug32c: vhd boot_sect.elf kernel.elf
 	qemu-system-i386 -s -S $< &
