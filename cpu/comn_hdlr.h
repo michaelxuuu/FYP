@@ -29,43 +29,10 @@ typedef struct {
 typedef irq_reg_info int_reg_info;
 
 // static is necessary or recursive definition occurs
-static char* exception_msgs[] = {
-    "Division By Zero",
-    "Debug",
-    "Non Maskable Interrupt",
-    "Breakpoint",
-    "Into Detected Overflow",
-    "Out of Bounds",
-    "Invalid Opcode",
-    "No Coprocessor",
-    "Double Fault",
-    "Coprocessor Segment Overrun",
-    "Bad TSS",
-    "Segment Not Present",
-    "Stack Fault",
-    "General Protection Fault",
-    "Page Fault",
-    "Reserved",
-    "Floating point",
-    "Alignment Check",
-    "Machine Check",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved",
-    "Reserved"
-};
+extern char* exception_msgs[];
 
 // This is a GLOBAL array, storing the addresses of intrrupt handlers defined elsewhere (in their respect .c files)
-static uint32_t interrupt_handlers[256];
+extern uint32_t interrupt_handlers[256];
 
 // A common exception handler
 void _exception_handler(excp_reg_info *r);

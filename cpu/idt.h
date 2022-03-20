@@ -84,7 +84,7 @@ typedef struct idt_gate
 } __attribute__((packed)) idt_gate;
 
 // Define idt that contains 256 idt gates
-static idt_gate idt[256];
+extern idt_gate idt[256];
 
 // A IDT descriptor that "lidt" will read
 typedef struct idt_descriptor {
@@ -92,10 +92,10 @@ typedef struct idt_descriptor {
     uint32_t base; 
 } __attribute__((packed)) idt_descriptor;
 
-static idt_descriptor idt_descriptor_sturct;
+extern idt_descriptor idt_descriptor_sturct;
 
 // Function that loads the idt
-void load_idt();
+void load_idtr();
 
 // Function that registers an IDT gate with a handler in IDT
 void register_idt_gate(int gate_num, uint32_t handler_addr);

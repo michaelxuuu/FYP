@@ -7,6 +7,8 @@
 
 #include "./../kernel/util.h"
 
+#include "./../cpu/idt.h"
+
 /*===================================================================
  * One way to create the mapping table between the virtual pages
  * and physcial memory blocks is to generate an array of integers
@@ -275,5 +277,7 @@ void vm_mngr_init();
 void vm_mngr_enable_paging(int enable);
 
 void page_fault();
+
+void flush_tlb_entry(virt_addr va);
 
 #endif

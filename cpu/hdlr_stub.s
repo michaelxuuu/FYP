@@ -98,7 +98,7 @@ handle_exception:
     mov %ds, %ax
     pushl %eax 
     // load kernel ds
-    mov $0x10, %ax
+    mov $kernel_data_selector, %ax
     mov %ax, %ds
     mov %ax, %es
     mov %ax, %fs
@@ -134,7 +134,7 @@ handle_irq:
     mov %ds, %ax
     pushl %eax 
     // load kernel ds
-    mov $0x10, %ax
+    mov $kernel_data_selector, %ax
     mov %ax, %ds
     mov %ax, %es
     mov %ax, %fs

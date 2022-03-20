@@ -122,22 +122,22 @@ vm_mngr_map(physical_addr pa, virt_addr va) {
      */
 
     // Pointer to the page directory
-    physical_addr* ptr_to_pd = (physical_addr*) cur_pd_addr;
+    physical_addr* ptr_to_pd = (physical_addr*) (cur_pd_addr + 0xC0000000);
 
     // Pointer to the page directory entry, which points to the page table
     pte* ptr_to_pde = ptr_to_pd + va_get_dir_index(va); // A page directoiry entry is in essence a page table entry (PTE)
 
     // Allocate a frame for the 'page table' page if PDE PRESENT bit unset
     if (!page_is_present(*ptr_to_pde)) {
-        physical_addr* frame_addr = (physical_addr*)vm_mngr_alloc_frame(ptr_to_pde);
-        if (!frame_addr)
+        physical_addr* ptr_to_frame = (physical_addr*)(vm_mngr_alloc_frame(ptr_to_pde) + 0xC0000000);
+        if (!ptr_to_frame)
             return;
         // Clear the page table to all 0's
-        mem_set(frame_addr, 0, 4096);
+        mem_set(ptr_to_frame, 0, 4096);
     }
 
     // Pointer to the page table
-    physical_addr* ptr_to_pt = (physical_addr*)page_get_frame_addr(*ptr_to_pde);
+    physical_addr* ptr_to_pt = (physical_addr*)(page_get_frame_addr(*ptr_to_pde) + 0xC0000000);
 
     // Pointer to the page table entry
     pte* ptr_to_pte = ptr_to_pt + va_get_page_index(va);
@@ -145,6 +145,16 @@ vm_mngr_map(physical_addr pa, virt_addr va) {
     // Mark the page as PRESENT and assign it with the physcial address passed in
     page_install_frame_addr(ptr_to_pte, pa);
     page_add_attrib(ptr_to_pte, PAGE_PRESENT | PAGE_WRITABLE); // Kernel Page is automatically and implicitly implied by not setting PAGE_USER
+}
+
+void 
+flush_tlb_entry(virt_addr va) {
+    __asm__ volatile (
+        "cli;"
+        "invlpg (%0);"
+        "sti;"
+        :: "r" (va)
+    );
 }
 
 void 
@@ -161,7 +171,7 @@ vm_mngr_init() {
     vm_mngr_load_pd(cur_pd_addr);
 
     // Clear the directory table
-    mem_set((physical_addr*)cur_pd_addr, 0, 4096);
+    mem_set((physical_addr*)(cur_pd_addr + 0xC0000000), 0, 4096);
 
     // Identity map the kernel (also the lower 4M physical memory)
     for (int pa = 0x0, va = 0x0, ct = 0; ct < 1024; ct++, pa += 4096, va += 4096)
@@ -172,6 +182,38 @@ vm_mngr_init() {
         vm_mngr_map(pa, va);
     
     vm_mngr_enable_paging(1);
+
+    // Swicth gdt to jump to higher half kernel to execute
+     __asm__ volatile
+    (
+        /**
+         * With paging enabled and the GDT base address field being 0, the logical address of the gdt base
+         * equals its linear address. (Refer to page 91 of 421 in the i386 manual) Thus, given the I386 manual 
+         * states that GDTR stores the linear address of the gdt base, and that the gdt descriptor base address 
+         * field's been filled with the virtual (logical) address (see line 216 in kernel_entry.s), we should 
+         * directly load the entire gdt descriptor base address of 32 bits into GDTR.
+         * 
+         * This is done easily using lgdtl, where the suffix - l - tells indicates a oprand size of 32 bits 
+         * and to load the entire 32-bit the diescriptor base field to GDTR
+         */
+        "lgdtl 0xC0000038;" // lgdtl -> the suffix tells the to load a 32 bit base not a 24 bit one which is indicated by suffix w if lgdtw were used
+        "ljmpl $kernel_code_selector, $switch_gdt;"
+        "switch_gdt:;"
+        "mov $kernel_data_selector, %ax;"
+        "mov %ax, %ds;"
+        "mov %ax, %ss;"
+        "mov %ax, %es;"
+        "mov %ax, %fs;"
+        "mov %ax, %gs;"
+    );
+
+    // Discard the identity mapping of first 4M of memory
+    vm_mngr_free_frame((pte*)(cur_pd_addr + 0xC0000000));
+    page_del_attrib((pte*)(cur_pd_addr + 0xC0000000), PAGE_PRESENT);
+
+    // Manually flush the TLB entry to discard any cached mapping's
+    for (int i = 0; i < 1024; i += 4096)
+        flush_tlb_entry(i);
 }
 
 void 
@@ -184,8 +226,9 @@ vm_mngr_enable_paging(int enable) {
      */
     __asm__
     (
+        "cli;"
         "mov %cr0, %eax;"
-        "cmp $1, 8(%esp);"
+        "cmpl $1, 8(%esp);"
         "je paging_en;"
         "and $0x7FFFFFFF, %eax;"
         "mov %eax, %cr0;"

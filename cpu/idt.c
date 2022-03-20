@@ -1,14 +1,28 @@
 #include "idt.h"
 
-void load_idt() {
-    idt_descriptor_sturct.base = (uint32_t) &(idt);
+idt_gate idt[256];
+
+idt_descriptor idt_descriptor_sturct;
+
+void load_idtr() {
+    idt_descriptor_sturct.base = ((uint32_t)&(idt));
     idt_descriptor_sturct.limit = sizeof(idt_gate) * 256 - 1;
-    __asm__ volatile("lidt (%0)" : : "r"(&idt_descriptor_sturct));
+    /**
+     * With paging enabled and the GDT base address field being 0, the logical address of the idt 
+     * equals its linear address. (Refer to page 91 of 421 in the i386 manual)
+     * Thus, given the I386 manual states that IDTR stores the linear address of the idt base,
+     * and that the idt descriptor base address field's been installed with the virtual (logical) address,
+     * we should directly load the entire idt descriptor base address of 32 bits into IDTR.
+     * 
+     * This is done easily using lidtl, where the suffix - l - tells indicates a oprand size of 32 bits 
+     * and to load the entire 24 bits of the diescriptor base field to IDTR.
+     */
+    __asm__ volatile("lidtl (%0)" : : "r"(&idt_descriptor_sturct));
 }
 
 void register_idt_gate(int gate_num, uint32_t handler_addr) {
     idt[gate_num].handler_addr_low = low_16(handler_addr);
-    idt[gate_num].handler_seg_selector = 0x08; // kernel code segment offset
+    idt[gate_num].handler_seg_selector = 0x18; // Marked as entern in .h file, defined in kernel_entry.s
     idt[gate_num].always0 = 0;
     idt[gate_num].flags = 0x8E;
     idt[gate_num].handler_addr_high = high_16(handler_addr);
@@ -70,5 +84,8 @@ void install_idt() {
     register_idt_gate(47, (uint32_t) int_47);
 
     // put idt descriptor into lidt register
-    load_idt();
+    load_idtr();
+
+    // Enable interrupt
+    __asm__ volatile ("sti;");
 }

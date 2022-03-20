@@ -4,7 +4,7 @@
 #include <stdarg.h>
 #include "low_level.h"
 #include "./../kernel/util.h"
-#define VIDEO_ADDRESS 0xb8000
+#define VIDEO_ADDRESS 0xC00b8000
 #define MAX_ROW 25
 #define MAX_COL 80
 #define WHITE_ON_BLACK 0x07

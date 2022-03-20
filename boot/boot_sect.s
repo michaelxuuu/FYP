@@ -119,7 +119,7 @@
         the above process on and on till the end of the loop.
 */
 .code16
-.global init
+.global init16
 .text
 
 init16:
@@ -366,7 +366,7 @@ sys_ready:
     /* BIOS's IVT has been overwritten so intrrupts are now useless, thus we trun it off */
     mov $0x0, %ax
     mov %ax, %ds
-    ljmp $0x0, $0x2e
+    ljmp $0x0, $0x3e
     /* Do a long jump to 0x0:46 to execute our system code. But why 46? See kernel_entry.s and compile it
     and use 'i386-elf-objdump -t' to inspect the symbol table to try to find symbol 'pm_init' */
 

@@ -148,6 +148,23 @@ null_descritpor:
     base 0x00000000
     limit 0xfffff
 */
+kcode_descritpor_temp:
+    .word 0xffff
+    .word 0x0
+    .byte 0x0
+    .byte 0b10011010 /* segment present = 1, privilege level = 00, descriptor type = 1(code or data), code = 1,  conforming = 0, readable = 1, AVL = 0 */
+    .byte 0b11001111 /* granularity(7) is 1 so that we can access the entire 4G memory */
+    .byte 0x40
+
+/* kernel data segment descriptor */
+kdata_descritpor_temp:
+    .word 0xffff
+    .word 0x0
+    .byte 0x0
+    .byte 0b10010010 /* code(3)=0 */
+    .byte 0b11001111
+    .byte 0x40
+
 kcode_descritpor:
     .word 0xffff
     .word 0x0
@@ -183,10 +200,15 @@ udata_descritpor:
     .byte 0b11001111
     .byte 0x0
 
+.set kernel_code_selector_temp, kcode_descritpor_temp - null_descritpor
+.set kernel_data_selector_temp, kdata_descritpor_temp - null_descritpor
 .set kernel_code_selector, kcode_descritpor - null_descritpor
 .set kernel_data_selector, kdata_descritpor - null_descritpor
 .set user_code_selector, ucode_descritpor - null_descritpor
 .set user_data_selector, udata_descritpor - null_descritpor
+
+.global kernel_code_selector
+.global kernel_data_selector
 
 /* GDT pointer */
 gdt_ptr:
@@ -195,30 +217,43 @@ gdt_ptr:
 
 /* Switch to protected mode! */
 enter32:
-    lgdt gdt_ptr
+    /**
+     * Before the segmented model is activiated, the logical address of the gdt
+     * equals its linear address. (Refer to page 91 of 421 in the i386 manual)
+     * Thus, given the I386 manual states that GDTR stores the linear address 
+     * of the gdt base, and that the idt descriptor base address field's been 
+     * filled with the virtual (logical) address (line 216), which is 
+     * 0xC0000000 + physical, the highest hex bit of 0xC should be excluded 
+     * during loadind to yeild its physical address loaded into IDTR
+     * 
+     * This is done easily using lidtw, where the suffix - w - tells indicates 
+     * a oprand size of 16 bits and to load the entire 24 bits of the diescriptor 
+     * base field to IDTR, which helps exclude the highest hex bit of 0xC
+     */
+    lgdtw 0x38  // lgdtw -> the suffix tells the to load a 32 bit base not a 24 bit one which is indicated by suffix l if lgdtw were used
     /* Load gdt to gdtr (a register pointing to gdt in the memory) */
     mov %cr0, %eax
     or $0x1, %eax
     mov %eax, %cr0
     /* Enable A20 address line */
-    ljmp $kernel_code_selector, $init32
+    ljmpl $kernel_code_selector_temp, $init32
     /* Jump to choosing the kernel code segment withe the offset instructed by the label 'init_pm' */
 
 .extern _start
 .code32
 init32:
-    mov $kernel_data_selector, %ax
+    mov $kernel_data_selector_temp, %ax
     mov %ax, %ds
     mov %ax, %ss
     mov %ax, %es
     mov %ax, %fs
     mov %ax, %gs
     /* Set DS to choosing the kernel data segment based on which all of our later memeory access */
-    mov $0x90000, %ebp
+    mov $0xC0090000, %ebp
     mov %ebp,     %esp
     /* Set up the stack segment, preparing the running environmnet for our C code */
     mov $enter32_msg, %esi
-    mov $0xb8000, %edi
+    mov $0xC00b8000, %edi
     add $320, %edi
     call prt_str32
     jmp _start

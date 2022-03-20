@@ -31,10 +31,10 @@ vhd: boot_sect.bin kernel.bin
 	dd bs=512 if=kernel.bin of=$@ seek=1 count=1024 conv=notrunc
 
 kernel.elf: kernel_entry.o $(OBJ)
-	i386-elf-ld -Ttext 0x0 -o $@  $^
+	i386-elf-ld -Ttext 0xC0000000 -o $@  $^
 
 kernel.bin: kernel_entry.o $(OBJ)
-	i386-elf-ld -Ttext 0x0 -o $@ --oformat binary $^
+	i386-elf-ld -Ttext 0xC0000000 -o $@ --oformat binary $^
 
 %.o: %.c
 	i386-elf-gcc -ffreestanding -g -c $< -o $@
