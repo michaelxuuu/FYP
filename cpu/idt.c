@@ -31,9 +31,6 @@ void register_idt_gate(int gate_num, uint32_t handler_addr) {
 // A function installing the idt with all gates needed
 void install_idt() {
 
-    // initialize 8259A PIC
-    pic_init();
-
     register_idt_gate(0, (uint32_t) int_0);
     register_idt_gate(1, (uint32_t) int_1);
     register_idt_gate(2, (uint32_t) int_2);
@@ -82,6 +79,15 @@ void install_idt() {
     register_idt_gate(45, (uint32_t) int_45);
     register_idt_gate(46, (uint32_t) int_46);
     register_idt_gate(47, (uint32_t) int_47);
+
+}
+
+void interrupt_init() {
+
+    // initialize 8259A PIC
+    pic_init();
+
+    install_idt();
 
     // put idt descriptor into lidt register
     load_idtr();

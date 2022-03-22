@@ -4,6 +4,6 @@
 #include <stdint.h>
 #include "../cpu/comn_hdlr.h"
 
-void register_keyboard_handler(void);
+void keyboard_init(void);
 
 #endif

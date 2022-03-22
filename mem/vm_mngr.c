@@ -148,16 +148,6 @@ vm_mngr_map(physical_addr pa, virt_addr va) {
 }
 
 void 
-flush_tlb_entry(virt_addr va) {
-    __asm__ volatile (
-        "cli;"
-        "invlpg (%0);"
-        "sti;"
-        :: "r" (va)
-    );
-}
-
-void 
 vm_mngr_init() {
     /**
      * 1. Identity map the kernel so that the execution of the current code won't be affacted when enabling the paging
@@ -212,8 +202,8 @@ vm_mngr_init() {
     page_del_attrib((pte*)(cur_pd_addr + 0xC0000000), PAGE_PRESENT);
 
     // Manually flush the TLB entry to discard any cached mapping's
-    for (int i = 0; i < 1024; i += 4096)
-        flush_tlb_entry(i);
+    for (int i = 0, va = 0; i < 1024; i++, va += 4096)
+        __asm__ volatile ("invlpg (%0);" :: "r"(va));
 }
 
 void 

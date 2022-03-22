@@ -100,7 +100,10 @@ void load_idtr();
 // Function that registers an IDT gate with a handler in IDT
 void register_idt_gate(int gate_num, uint32_t handler_addr);
 
-// Function that registers the idt gates and loads idt
+// Function that registers the all of the idt gates
 void install_idt();
+
+// Initialize 8259A, installs IDT, loads IDTR, enables interrupt
+void interrupt_init();
 
 #endif

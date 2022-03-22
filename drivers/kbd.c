@@ -7,7 +7,7 @@ void keyboard_callback(irq_reg_info *r)
     printf("%d\n", (uint32_t)scancode);
 }
 
-void register_keyboard_handler()
+void keyboard_init()
 {
     register_handler(33, keyboard_callback);
 }

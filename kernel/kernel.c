@@ -8,9 +8,9 @@ int _start() {
 	clear_screen();
 	pm_mngr_init();
 	vm_mngr_init();
-	install_idt();
+	interrupt_init();
+	keyboard_init();
 	__asm__ ("int $1;"); // Successfully handled
-	__asm__ ("jmp 0x0;"); // Page Fault
 	for(;;);
 }
 
