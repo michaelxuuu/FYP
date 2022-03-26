@@ -18,6 +18,7 @@ int get_cursor() {
     pixel_offset += port_byte_in(CRT_DATA_REG);
     return pixel_offset * 2;
 }
+
 void set_cursor(int byte_offset) {
     // It is required to use pixel offsets to set the cursor
     int pixel_offset = byte_offset / 2;
@@ -122,7 +123,8 @@ int handle_scrolling(int offset) {
 enum format_types {
     FMT_INT,
     FMT_FLOAT,
-    FMT_STR
+    FMT_STR,
+    FMT_CHAR
 };
 
 typedef struct placeHolderStruct {
@@ -250,6 +252,13 @@ int placeholder_parser(const char* *s, placeHolderStruct * ph_struct)
                     if (numOfZerosToPad[0] >= 0)
                         ph_struct->numOfZeros = strToInt(*s, numOfZerosToPad[0], numOfZerosToPad[1]);
                 }
+                else if (*iter == 'c')
+                {
+                    ph_struct->type = FMT_CHAR;
+                    ph_struct->numOfDecimalPts = 0;
+                    if (numOfZerosToPad[0] >= 0)
+                        ph_struct->numOfZeros = strToInt(*s, numOfZerosToPad[0], numOfZerosToPad[1]);
+                }
                 else
                     // Error: unknown format
                     return 1;
@@ -285,7 +294,8 @@ void printf(const char * fromat, ...) {
         PRINT_INT,
         PRINT_FLOAT,
         PRINT_STR,
-        PARSE_PLACEHOLDER
+        PARSE_PLACEHOLDER,
+        PRINT_CHAR_FORMAT
     } STATE;
     STATE state = INIT;
     placeHolderStruct ph_struct = {-1, 0, 0, 0};
@@ -325,8 +335,10 @@ void printf(const char * fromat, ...) {
                         state = PRINT_INT;
                     else if (ph_struct.type == FMT_FLOAT)
                         state = PRINT_FLOAT;
-                    else
+                    else if (ph_struct.type == FMT_STR)
                         state = PRINT_STR;
+                    else 
+                        state = PRINT_CHAR_FORMAT;
                 }
                 ++iter;
             } break;
@@ -374,6 +386,22 @@ void printf(const char * fromat, ...) {
                 else {
                     print(arg_str);
                     print_spaces(ph_struct.numOfZeros);
+                }
+                state = INIT;
+            } break;
+
+            case PRINT_CHAR_FORMAT:
+            {
+                char arg_char = va_arg(args, int);
+                if (arg_char != 0) {
+                    if (!ph_struct.padFromBack) {
+                        print_spaces(ph_struct.numOfZeros);
+                        putchar(arg_char);
+                    }
+                    else {
+                        putchar(arg_char);
+                        print_spaces(ph_struct.numOfZeros);
+                    }
                 }
                 state = INIT;
             } break;

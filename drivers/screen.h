@@ -14,12 +14,13 @@
 
 void print_char (char character, int col, int row, char char_attrib);
 int get_screen_offset(int col, int row);
-int get_curosr(void);
+int get_cursor(void);
 void set_cursor(int offset);
 void clear_screen(void);
 void print_at(char * msg, int col, int row);
 void print(char * msg);
 int handle_scrolling(int offset);
 void printf(const char * fromat, ...);
+void putchar(char c);
 
 #endif

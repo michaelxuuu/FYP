@@ -15,6 +15,7 @@ void fToStr(double f, char * s, int num);
 int strToInt(const char * s, int i, int j);
 int isDigit(char c);
 int isLetter(char c);
+int isascii(int c);
 
 #define low_16(addr) (uint16_t)(addr & 0xFFFF)
 #define high_16(addr) (uint16_t)((addr >> 16) & 0xFFFF)

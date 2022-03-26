@@ -110,3 +110,8 @@ int isDigit(char c) {
 int isLetter(char c) {
     return c >= 'a' && c <= 'z';
 }
+
+int isascii(int c)
+{
+  return((c <= 127) && (c >= 0));
+}
