@@ -71,10 +71,10 @@ pm_mngr_free_block(physical_addr pa) {
 void 
 pm_mngr_init() {
 
-    // Mark first 2M as in use (kernel code + stack + heap)
-    // 1MB is (2MB/4KB)/32 = 16
+    // Mark first 1M as in use
+    // 1MB is (1MB/4KB)/32 = 8
     int i = 0;
-    for (; i < 16; i++)
+    for (; i < 8; i++)
         mem_bitmap[i] = 0xFFFFFFFF;
 
     // Mark all the memory higher than 512KB as free

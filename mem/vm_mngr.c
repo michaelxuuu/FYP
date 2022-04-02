@@ -147,6 +147,46 @@ vm_mngr_map(physical_addr pa, virt_addr va) {
     page_add_attrib(ptr_to_pte, PAGE_PRESENT | PAGE_WRITABLE); // Kernel Page is automatically and implicitly implied by not setting PAGE_USER
 }
 
+/**
+ * 
+ * Kernel VIRTUAL Address Space Layout:
+ * 
+ * +----------------------------+   0x100000000     4G
+ * |  Kernel Page Table         |   4M
+ * +----------------------------+   0xffc00000
+ * |  Kernel Stack              |   4M
+ * +----------------------------+   0xff800000
+ * |                            |       ^
+ * |                            |       |
+ * |                            |       |
+ * |                            |   Unmapped (to map, use sbrk)
+ * |                            |       |
+ * |                            |       |
+ * |  Kernel Heap               |       V
+ * +----------------------------+   0xC0100000
+ * |  Video Rom                 |   512K
+ * +----------------------------+   0xC0080000
+ * |  Kernel Code               |   512K
+ * +----------------------------+   0xC0000000
+ * 
+ * Physical Memory Layout:
+ * 
+ * +----------------------------+   128M
+ * |                            |
+ * |  Free                      |
+ * +----------------------------+   0x900000
+ * |  Kernel Page Table         |   4M (20K in use without idantity mapping disabled)
+ * +----------------------------+   0x500000
+ * |  Kernel Stack              |   4M
+ * +----------------------------+   0x100000
+ * |  Video Rom                 |   512K
+ * +----------------------------+   0x80000
+ * |  Kernel Code               |   512K
+ * +----------------------------+   0x0
+ * 
+ *  
+ */
+
 void 
 vm_mngr_init() {
     /**
@@ -154,7 +194,11 @@ vm_mngr_init() {
      * 2. Map the kernel to 3GB virtual to make a higher half kernel
      */
 
-    // Allocate memory for a default page directory table
+    // Allocate 4M memory for Kernel Stack (fixed size, frames not meant to ever be freed at any time)
+    for (int i = 0; i < 1024; i++)
+        pm_mngr_alloc_block();
+
+    // Allocate memory for a default page directory table (1 new page)
     cur_pd_addr = pm_mngr_alloc_block();
     
     // Load the address of the PD to the PDBR
@@ -163,14 +207,27 @@ vm_mngr_init() {
     // Clear the directory table
     mem_set((physical_addr*)(cur_pd_addr + 0xC0000000), 0, 4096);
 
-    // Identity map the kernel (also the lower 4M physical memory)
-    for (int pa = 0x0, va = 0x0, ct = 0; ct < 1024; ct++, pa += 4096, va += 4096)
+    // Identity map first 1M (1 new page for 0-4M virtual)
+    for (int pa = 0x0, va = 0x0, ct = 0; ct < 256; ct++, pa += 4096, va += 4096)
         vm_mngr_map(pa, va);
 
-    // Map the kernel to 3G virtual
-    for (int pa = 0x0, va = 0xC0000000, ct = 0; ct < 1024; ct++, pa += 4096, va += 4096)
+    // Map first 1M to 3GB virtual (1 new page for 3G to 3G+4M virtual)
+    for (int pa = 0x0, va = 0xC0000000, ct = 0; ct < 256; ct++, pa += 4096, va += 4096)
+        vm_mngr_map(pa, va);
+
+    // Map kernel stack to 4G-8M virtual (1 new page for 4G-8M to 4G-4M virtual)
+    for (int pa = 0x100000, va = 0xff800000, ct = 0; ct < 1024; ct++, pa += 4096, va += 4096)
         vm_mngr_map(pa, va);
     
+    // Map kernel page table to 3G - 4M (1 new page for 4G-4M to 4G virtual)
+    for (int pa = 0x500000, va = 0xffc00000, ct = 0; ct < 1024; ct++, pa += 4096, va += 4096)
+        vm_mngr_map(pa, va);
+
+    // Reserve physical frames for more PT's to make the total space for kernel page tables 4M
+    for (int i = 0; i < 1019; i++)
+        pm_mngr_alloc_block();
+
+
     vm_mngr_enable_paging(1);
 
     // Swicth gdt to jump to higher half kernel to execute
@@ -198,11 +255,11 @@ vm_mngr_init() {
     );
 
     // Discard the identity mapping of first 4M of memory
-    vm_mngr_free_frame((pte*)(cur_pd_addr + 0xC0000000));
-    page_del_attrib((pte*)(cur_pd_addr + 0xC0000000), PAGE_PRESENT);
+    vm_mngr_free_frame((pte*)(0xffc00000));
+    page_del_attrib((pte*)(0xffc00000), PAGE_PRESENT);
 
     // Manually flush the TLB entry to discard any cached mapping's
-    for (int i = 0, va = 0; i < 1024; i++, va += 4096)
+    for (int i = 0, va = 0; i < 256; i++, va += 4096)
         __asm__ volatile ("invlpg (%0);" :: "r"(va));
 }
 
@@ -228,4 +285,41 @@ vm_mngr_enable_paging(int enable) {
         "mov %eax, %cr0;"
         "done:;"
     );
+}
+
+//=================================================================================================================================
+
+uint32_t kernelpt_region_bitmap[32];
+
+int kernelpt_region_bitmap_find_free()
+{
+    // Loop through each integer
+    for (int i = 0; i < 32; i++)
+        if (kernelpt_region_bitmap[i] != 0xFFFFFFFF)
+            // Loop through each bit
+            for(int bit = 0; bit < 32; bit++)
+                if ( !((1 << bit) & kernelpt_region_bitmap[i]) )
+                    return 32 * i + bit;
+    return -1;
+}
+
+virt_addr kernelpt_region_alloc_pg()
+{
+    int bit_index = mem_bitmap_find_free();
+
+    if (bit_index == -1)
+        return 0;
+    
+    kernelpt_region_bitmap[bit_index/32] |= 1 << bit_index%32;
+
+    virt_addr addr = bit_index * BLOCK_SIZE + 0xffc00000;
+
+    return addr;
+}
+
+void kernelpt_region_free_pg(virt_addr va)
+{
+    int block_index = (va - 0xffc00000) / BLOCK_SIZE;
+
+    kernelpt_region_bitmap[block_index/32] &= ~(1 << block_index%32);
 }

@@ -9,6 +9,13 @@ int _start() {
 	clear_screen();
 	pm_mngr_init();
 	vm_mngr_init();
+	__asm__
+	(
+		"pop %ebp;"
+		"mov $0xffc00000, %esp;"
+		"mov %esp, %ebp;"
+		"push %ebp;"
+	);
 	interrupt_init();
 	keyboard_init();
 	for(;;);

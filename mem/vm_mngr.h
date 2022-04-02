@@ -9,6 +9,60 @@
 
 #include "./../cpu/idt.h"
 
+/**
+ * 
+ * Kernel VIRTUAL Address Space Layout:
+ * 
+ * +----------------------------+   0x100000000     4G
+ * |  Kernel Page Table         |   4M
+ * +----------------------------+   0xffc00000
+ * |  Kernel Stack              |   4M
+ * +----------------------------+   0xff800000
+ * |                            |       ^
+ * |                            |       |
+ * |                            |       |
+ * |                            |   Unmapped (to map, use sbrk)
+ * |                            |       |
+ * |                            |       |
+ * |  Kernel Heap               |       V
+ * +----------------------------+   0xC0100000
+ * |  Video Rom                 |   512K
+ * +----------------------------+   0xC0080000
+ * |  Kernel Code               |   512K
+ * +----------------------------+   0xC0000000
+ * 
+ * Physical Memory Layout:
+ * 
+ * +----------------------------+   128M
+ * |                            |
+ * |  Free                      |
+ * +----------------------------+   0x900000
+ * |  Kernel Page Table         |   4M (20K in use without idantity mapping disabled)
+ * +----------------------------+   0x500000
+ * |  Kernel Stack              |   4M
+ * +----------------------------+   0x100000
+ * |  Video Rom                 |   512K
+ * +----------------------------+   0x80000
+ * |  Kernel Code               |   512K
+ * +----------------------------+   0x0
+ * 
+ *  
+ */
+
+#define KERNEL_STACK_VIRT_BASE 0xffc00000
+#define KERNEL_STACK_VIRT_LIMI 0xff800000
+#define KERNEL_STACK_PHY_BASE 0x100000
+#define KERNEL_STACK_PHY_LIMI 0x500000
+#define KERNEL_STACK_SIZE 0x400000
+
+#define KERNEL_PAGE_TABLE_VIRT_BASE 0xffc00000
+#define KERNEL_PAGE_TABLE_VIRT_LIMI 0x100000000
+#define KERNEL_PAGE_TABLE_PHY_BASE 0x500000
+#define KERNEL_PAGE_TABLE_PHY_LIMI 0x900000
+#define KERNEL_PAGE_TABLE_SIZE 0x400000
+
+#define KERNEL_HEAP_BASE 0xC0100000
+
 /*===================================================================
  * One way to create the mapping table between the virtual pages
  * and physcial memory blocks is to generate an array of integers
@@ -279,5 +333,14 @@ void vm_mngr_enable_paging(int enable);
 void page_fault();
 
 void flush_tlb_entry(virt_addr va);
+
+//=====================================================================================================
+extern uint32_t kernelpt_region_bitmap[32];
+
+int kernelpt_region_bitmap_find_free();
+
+virt_addr kernelpt_region_alloc_pg();
+
+void kernelpt_region_free_pg(virt_addr va);
 
 #endif
