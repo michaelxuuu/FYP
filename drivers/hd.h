@@ -1,7 +1,7 @@
 #ifndef HD_H
 #define HC_H
 
-#include<stdint.h>
+#include"../include/type.h"
 
 #include"low_level.h"
 

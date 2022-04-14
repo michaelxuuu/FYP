@@ -15,6 +15,4 @@
  */
 void fs_init();
 
-void 
-
 #endif

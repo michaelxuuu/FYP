@@ -1,9 +1,10 @@
 #ifndef COMN_HDLR_H
 #define COMN_HDLR_H
 
-#include <stdint.h>
+#include "../include/type.h"
 #include "idt.h"
-#include "./../drivers/screen.h"
+#include "../drivers/screen.h"
+#include "../kernel/kprintf.h"
 
 // A struct saving the register status when an interrupt occurs
 // When an interrupt occurs, some registers will be pushed onto the stack
@@ -27,18 +28,6 @@ typedef struct {
 }  irq_reg_info;
 
 typedef irq_reg_info int_reg_info;
-
-// static is necessary or recursive definition occurs
-extern char* exception_msgs[];
-
-// This is a GLOBAL array, storing the addresses of intrrupt handlers defined elsewhere (in their respect .c files)
-extern uint32_t interrupt_handlers[256];
-
-// A common exception handler
-void _exception_handler(excp_reg_info *r);
-
-// A common irq handler
-void _irq_handler(irq_reg_info *r);
 
 void register_handler(int, void(*int_handler_addr)(int_reg_info *));
 

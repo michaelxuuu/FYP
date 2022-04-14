@@ -39,7 +39,7 @@ char* exception_msgs[] = {
 // This is a GLOBAL array, storing the addresses of intrrupt handlers defined elsewhere (in their respect .c files)
 uint32_t interrupt_handlers[256];
 
-// A common exception handler
+// A common exception handler (gets called from the asm)
 void _exception_handler(excp_reg_info *r) {
     printf("Interrupt: %s\n", exception_msgs[r->int_no]);
     if (r->int_no <= 31) { // exception
@@ -51,7 +51,7 @@ void _exception_handler(excp_reg_info *r) {
     }
 }
 
-// A common irq handler
+// A common irq handler (gets called from the asm)
 void _irq_handler(irq_reg_info *r) 
 {
     if (r->int_no == 32)

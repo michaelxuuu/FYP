@@ -1,7 +1,7 @@
 #ifndef PIC_H
 #define PIC_H
 
-#include <stdint.h>
+#include "../include/type.h"
 #include "../drivers/low_level.h"
 
 /*

@@ -1,85 +1,83 @@
 #include "vm_mngr.h"
 
 int 
-va_get_dir_index(virt_addr va) {
-    // virt_addr is uint32_t, so this shift is performed on an unsigned value and so to be logical
+va_get_dir_index(uint32_t va) {
+    // uint32_t is uint32_t, so this shift is performed on an unsigned value and so to be logical
     return va >> 22;
 }
 
 int 
-va_get_page_index(virt_addr va) {
+va_get_page_index(uint32_t va) {
     return va >> 12 & 0x3FF; // Must mask off the dir index part
 }
 
 int 
-va_get_page_offset(virt_addr va) {
+va_get_page_offset(uint32_t va) {
     return va & 0xFFF; // Mask off the index part
 }
 
 void 
-page_add_attrib(physical_addr* ptr_to_pte, int attrib) {
+page_add_attrib(uint32_t* ptr_to_pte, int attrib) {
     *ptr_to_pte |= attrib;
 }
 
 
 void 
-page_del_attrib(physical_addr* ptr_to_pte, int attrib) {
+page_del_attrib(uint32_t* ptr_to_pte, int attrib) {
     *ptr_to_pte &= ~attrib;
 }
 
 
 void 
-page_install_frame_addr(physical_addr* ptr_to_pte, physical_addr frame_addr) {
+page_install_frame_addr(uint32_t* ptr_to_pte, uint32_t frame_addr) {
     // Clear the possibly existing frame address and install the new frame address
     *ptr_to_pte = (*ptr_to_pte & ~PAGE_FRAME_ADDR_MASK) | ((frame_addr / BLOCK_SIZE) << 12);
 }
 
 int 
-page_is_present(pte e) {
-    return e & PAGE_PRESENT;
+page_is_present(uint32_t pte) {
+    return pte & PAGE_PRESENT;
 }
 
 
 int 
-page_is_user(pte e) {
-    return e & PAGE_USER;
+page_is_user(uint32_t pte) {
+    return pte & PAGE_USER;
 }
 
 
 int 
-page_is_accessed(pte e) {
-    return e & PAGE_ACCESSED;
+page_is_accessed(uint32_t pte) {
+    return pte & PAGE_ACCESSED;
 }
 
 
 int
-page_is_dirty(pte e) {
-    return e & PAGE_DIRTY;
+page_is_dirty(uint32_t pte) {
+    return pte & PAGE_DIRTY;
 }
 
 
-physical_addr 
-page_get_frame_addr(pte e) {
-    // virt_addr is uint32_t, so this shift is performed on an unsigned value and so to be logical
+uint32_t 
+page_get_frame_addr(uint32_t e) {
+    // uint32_t is uint32_t, so this shift is performed on an unsigned value and so to be logical
     return (e >> 12) * BLOCK_SIZE;
 }
 
-physical_addr cur_pd_addr;
-
 void 
-vm_mngr_load_pd(physical_addr pd_addr) {
+vm_mngr_load_pd(uint32_t pd_physical_addr) {
     __asm__
     (
         "mov %0, %%eax;"
         "mov %%eax, %%cr3;"
-        :: "r" (pd_addr)
+        :: "r" (pd_physical_addr)
     );
 }
 
-physical_addr
-vm_mngr_alloc_frame(pte* ptr_to_pte) {
+uint32_t
+vm_mngr_alloc_frame(uint32_t* ptr_to_pte) {
     // Aquire a free block from our physical memory manager
-    physical_addr frame_addr = pm_mngr_alloc_block();
+    uint32_t frame_addr = pm_mngr_alloc_block();
 
     // Physical memory exhausted, allocation failure
     if (!frame_addr)
@@ -95,12 +93,12 @@ vm_mngr_alloc_frame(pte* ptr_to_pte) {
 }
 
 void
-vm_mngr_free_frame(pte* ptr_to_pte) {
+vm_mngr_free_frame(uint32_t* ptr_to_pte) {
     // Get the frame address
-    physical_addr frame_addr = page_get_frame_addr(*ptr_to_pte);
+    uint32_t frame_addr = page_get_frame_addr(*ptr_to_pte);
     
     // Do nothing if the page is unmapped, namely its frame address is 0x0
-    // Otherwise, the kernel area of the physical memory shall be in grave danger
+    // Otherwise, the kernel area of the physical memory would be in grave danger
     if (frame_addr)
         pm_mngr_free_block(frame_addr);
     
@@ -108,131 +106,88 @@ vm_mngr_free_frame(pte* ptr_to_pte) {
     page_del_attrib(ptr_to_pte, PAGE_PRESENT);
 }
 
+uint32_t* cur_pd_addr;
+
 void
-vm_mngr_map(physical_addr pa, virt_addr va) {
+vm_mngr_lower_kernel_map(uint32_t va, uint32_t pa)
+{
+    // Pointer to the current page directory
+    uint32_t *pd = cur_pd_addr;
 
-    /**
-     * The idea is simple:
-     * 1. Obtain the PTE based on the given virtual address (VA)
-     *      1.1 Get (a pointer to) the PD
-     *      1.2 Get (a pointer to) the PDE
-     *      1.3 Get (a pointer to) the PT
-     *      1.4 get (a pointer to) the PTE
-     * 2. Assign the given physical address to the frame address field of the PTE
-     */
+    // Pointer to the page directory entry
+    uint32_t *pde = pd + va_get_dir_index(va);
 
-    // Pointer to the page directory
-    physical_addr* ptr_to_pd = (physical_addr*) (cur_pd_addr + 0xC0000000);
+    // Create a page table if not present bit unset
+    if (!page_is_present(*pde))
+        mem_set((char*)(vm_mngr_alloc_frame(pde) + 0xC0000000), 0, BLOCK_SIZE); // Newly created page table must be cleared first
 
-    // Pointer to the page directory entry, which points to the page table
-    pte* ptr_to_pde = ptr_to_pd + va_get_dir_index(va); // A page directoiry entry is in essence a page table entry (PTE)
-
-    // Allocate a frame for the 'page table' page if PDE PRESENT bit unset
-    if (!page_is_present(*ptr_to_pde)) {
-        physical_addr* ptr_to_frame = (physical_addr*)(vm_mngr_alloc_frame(ptr_to_pde) + 0xC0000000);
-        if (!ptr_to_frame)
-            return;
-        // Clear the page table to all 0's
-        mem_set(ptr_to_frame, 0, 4096);
-    }
-
-    // Pointer to the page table
-    physical_addr* ptr_to_pt = (physical_addr*)(page_get_frame_addr(*ptr_to_pde) + 0xC0000000);
+    // Pointer to the page table (page_get_frame_addr returns the physical address, need to convert it to logical for memory access)
+    uint32_t *pt = (uint32_t*)(page_get_frame_addr(*pde) + 0xC0000000);
 
     // Pointer to the page table entry
-    pte* ptr_to_pte = ptr_to_pt + va_get_page_index(va);
+    uint32_t *pte = pt + va_get_page_index(va);
 
-    // Mark the page as PRESENT and assign it with the physcial address passed in
-    page_install_frame_addr(ptr_to_pte, pa);
-    page_add_attrib(ptr_to_pte, PAGE_PRESENT | PAGE_WRITABLE); // Kernel Page is automatically and implicitly implied by not setting PAGE_USER
+    // Install the page table entry
+    page_install_frame_addr(pte, pa);
+    page_add_attrib(pte, PAGE_PRESENT | PAGE_WRITABLE);
 }
 
-/**
- * 
- * Kernel VIRTUAL Address Space Layout:
- * 
- * +----------------------------+   0x100000000     4G
- * |  Kernel Page Table         |   4M
- * +----------------------------+   0xffc00000
- * |  Kernel Stack              |   4M
- * +----------------------------+   0xff800000
- * |                            |       ^
- * |                            |       |
- * |                            |       |
- * |                            |   Unmapped (to map, use sbrk)
- * |                            |       |
- * |                            |       |
- * |  Kernel Heap               |       V
- * +----------------------------+   0xC0100000
- * |  Video Rom                 |   512K
- * +----------------------------+   0xC0080000
- * |  Kernel Code               |   512K
- * +----------------------------+   0xC0000000
- * 
- * Physical Memory Layout:
- * 
- * +----------------------------+   128M
- * |                            |
- * |  Free                      |
- * +----------------------------+   0x900000
- * |  Kernel Page Table         |   4M (20K in use without idantity mapping disabled)
- * +----------------------------+   0x500000
- * |  Kernel Stack              |   4M
- * +----------------------------+   0x100000
- * |  Video Rom                 |   512K
- * +----------------------------+   0x80000
- * |  Kernel Code               |   512K
- * +----------------------------+   0x0
- * 
- *  
- */
+#define KERNEL_STACK_BASE (0xFFC00000 - 1)
+#define KERNEL_STACK_LIMI (KERNEL_STACK_BASE - 0x400000 + 1)
 
-void 
+void
 vm_mngr_init() {
     /**
      * 1. Identity map the kernel so that the execution of the current code won't be affacted when enabling the paging
      * 2. Map the kernel to 3GB virtual to make a higher half kernel
+     * 3. Set up the kernel address space
      */
 
     // Allocate 4M memory for Kernel Stack (fixed size, frames not meant to ever be freed at any time)
-    for (int i = 0; i < 1024; i++)
-        pm_mngr_alloc_block();
+    for (int i = 0; i < 1024; i++) {
+        mem_set((char*)(pm_mngr_alloc_block() + 0xC0000000), 0, BLOCK_SIZE);
+    }
 
-    // Allocate memory for a default page directory table (1 new page)
-    cur_pd_addr = pm_mngr_alloc_block();
-    
-    // Load the address of the PD to the PDBR
-    vm_mngr_load_pd(cur_pd_addr);
+    // Allocate 4K memory for the utility page
+    mem_set((char*)(pm_mngr_alloc_block() + 0xC0000000), 0, BLOCK_SIZE);
 
-    // Clear the directory table
-    mem_set((physical_addr*)(cur_pd_addr + 0xC0000000), 0, 4096);
+    // Create a page directory table
+    cur_pd_addr = (uint32_t*)(pm_mngr_alloc_block() + 0xC0000000);
+    mem_set((char*)cur_pd_addr, 0, BLOCK_SIZE);
 
-    // Identity map first 1M (1 new page for 0-4M virtual)
-    for (int pa = 0x0, va = 0x0, ct = 0; ct < 256; ct++, pa += 4096, va += 4096)
-        vm_mngr_map(pa, va);
+    // Load the PHYSICAL address of the page directory to the PDBR (HENCE minus 0xC0000000)
+    vm_mngr_load_pd((uint32_t)cur_pd_addr - 0xC0000000);
 
-    // Map first 1M to 3GB virtual (1 new page for 3G to 3G+4M virtual)
-    for (int pa = 0x0, va = 0xC0000000, ct = 0; ct < 256; ct++, pa += 4096, va += 4096)
-        vm_mngr_map(pa, va);
+    // Identity map the first 1M
+    for (uint32_t pa = 0x0; pa < 0x100000; pa += BLOCK_SIZE)
+        vm_mngr_lower_kernel_map(pa, pa); // physical addr = virtual addr in identity mapping
 
-    // Map kernel stack to 4G-8M virtual (1 new page for 4G-8M to 4G-4M virtual)
-    for (int pa = 0x100000, va = 0xff800000, ct = 0; ct < 1024; ct++, pa += 4096, va += 4096)
-        vm_mngr_map(pa, va);
-    
-    // Map kernel page table to 3G - 4M (1 new page for 4G-4M to 4G virtual)
-    for (int pa = 0x500000, va = 0xffc00000, ct = 0; ct < 1024; ct++, pa += 4096, va += 4096)
-        vm_mngr_map(pa, va);
+    // Map the first 1M to 3GB virtual (1 new page table created)
+    for (uint32_t va = 0xC0000000, pa = 0x0; pa < 0x100000; pa += BLOCK_SIZE, va += BLOCK_SIZE)
+        vm_mngr_lower_kernel_map(va, pa);
 
-    // Reserve physical frames for more PT's to make the total space for kernel page tables 4M
-    for (int i = 0; i < 1019; i++)
-        pm_mngr_alloc_block();
+    // Map the kernel stack to 0xffc00000 (the last page of the virtual address space)
+    for (uint32_t va = KERNEL_STACK_LIMI, pa = 0x100000; pa < 0x500000; pa += BLOCK_SIZE, va += BLOCK_SIZE)
+        vm_mngr_lower_kernel_map(va, pa);
 
+    // Map the utility page to 0xC0100000
+    vm_mngr_lower_kernel_map(0xC0100000, 0x500000);
+    // Link the utility page table to the last PDE in the directory table
+    page_install_frame_addr(cur_pd_addr + 1023, 0x500000);
+    page_add_attrib(cur_pd_addr + 1023, PAGE_PRESENT | PAGE_WRITABLE);
 
-    vm_mngr_enable_paging(1);
+    // Map the kernel page directory to 0xC0101000
+    vm_mngr_lower_kernel_map(0xC0101000, 0x501000);
 
-    // Swicth gdt to jump to higher half kernel to execute
+    // Enable paging
      __asm__ volatile
     (
+        // Enable paging
+        "mov %cr0, %eax;"
+        "or $0x80000000, %eax;"
+        "mov %eax, %cr0;"
+
+        // Jump to higher half kernel
         /**
          * With paging enabled and the GDT base address field being 0, the logical address of the gdt base
          * equals its linear address. (Refer to page 91 of 421 in the i386 manual) Thus, given the I386 manual 
@@ -243,7 +198,7 @@ vm_mngr_init() {
          * This is done easily using lgdtl, where the suffix - l - tells indicates a oprand size of 32 bits 
          * and to load the entire 32-bit the diescriptor base field to GDTR
          */
-        "lgdtl 0xC0000038;" // lgdtl -> the suffix tells the to load a 32 bit base not a 24 bit one which is indicated by suffix w if lgdtw were used
+        "lgdtl gdt_ptr;" // lgdtl -> the suffix tells the to load a 32 bit base not a 24 bit one which is indicated by suffix w if lgdtw were used
         "ljmpl $kernel_code_selector, $switch_gdt;"
         "switch_gdt:;"
         "mov $kernel_data_selector, %ax;"
@@ -254,72 +209,136 @@ vm_mngr_init() {
         "mov %ax, %gs;"
     );
 
-    // Discard the identity mapping of first 4M of memory
-    vm_mngr_free_frame((pte*)(0xffc00000));
-    page_del_attrib((pte*)(0xffc00000), PAGE_PRESENT);
+/* Copy the kernel stack from 0x90000 to 0xFFC00000 */
 
-    // Manually flush the TLB entry to discard any cached mapping's
+    // Get the value that %esp and %ebp holds
+    uint32_t ebp, esp;
+    __asm__ volatile
+    (
+        "mov %%ebp, %0;"
+        "mov %%esp, %1;"
+        : "=r" (ebp), "=r" (esp)
+    );
+
+    // Copy the memory from 0x90000 to %esp (%esp <= %ebp) to the memory region starts from 0xFFFFFFFF downwards
+    for (int i = 0, j = 0; i < 0xC0090000 - esp; i++, j--)
+        ((uint8_t*)KERNEL_STACK_BASE)[j] = ((uint8_t*)0xC0090000)[j];
+
+    // Have %esp and %ebp point to the corrsponding addresses in the mapped stack region
+    ebp = KERNEL_STACK_BASE - (0xC0090000 - ebp);
+    esp = KERNEL_STACK_BASE - (0xC0090000 - esp);
+    __asm__ volatile
+    (
+        "mov %0, %%esp;"
+        "mov %1, %%ebp;"
+        :: "r" (esp), "r" (ebp)
+    );
+
+    // Update the current page diretory pointer (have it point to the mapped PD in 3G virtual)
+    cur_pd_addr = (uint32_t*)0xC0101000;
+
+/* Discard the lower kernel */
+
+    // Delete the first page table
+    vm_mngr_free_frame(cur_pd_addr);
+
+    // Delete the page directory entry
+    page_del_attrib(cur_pd_addr, PAGE_PRESENT);
+    
+    // Flush the TLB
     for (int i = 0, va = 0; i < 256; i++, va += 4096)
         __asm__ volatile ("invlpg (%0);" :: "r"(va));
 }
 
-void 
-vm_mngr_enable_paging(int enable) {
-    /**
-     * Stack:
-     *  esp + 8     argumnet       (pushed by 'pushl $1' - generated by the compiler, in the caller scope)
-     *  esp + 4     return address (pushed by the 'call' instr)
-     *  esp         caller's ebp   (pushed by 'push ebp' - generated by the compiler, in the callee scope)
-     */
-    __asm__
-    (
-        "cli;"
-        "mov %cr0, %eax;"
-        "cmpl $1, 8(%esp);"
-        "je paging_en;"
-        "and $0x7FFFFFFF, %eax;"
-        "mov %eax, %cr0;"
-        "jmp done;"
-        "paging_en:;"
-        "or $0x80000000, %eax;"
-        "mov %eax, %cr0;"
-        "done:;"
-    );
-}
-
-//=================================================================================================================================
-
-uint32_t kernelpt_region_bitmap[32];
-
-int kernelpt_region_bitmap_find_free()
+void
+vm_mngr_higher_kernel_map(uint32_t va, uint32_t pa)
 {
-    // Loop through each integer
-    for (int i = 0; i < 32; i++)
-        if (kernelpt_region_bitmap[i] != 0xFFFFFFFF)
-            // Loop through each bit
-            for(int bit = 0; bit < 32; bit++)
-                if ( !((1 << bit) & kernelpt_region_bitmap[i]) )
-                    return 32 * i + bit;
-    return -1;
-}
+    // Pointer to the page directory
+    uint32_t *pd = cur_pd_addr;
 
-virt_addr kernelpt_region_alloc_pg()
-{
-    int bit_index = mem_bitmap_find_free();
+    // Pointer to the page directory entry (page table directiry is always mapped, NO page fault in accessing it!)
+    uint32_t *pde = cur_pd_addr + va_get_dir_index(va);
 
-    if (bit_index == -1)
-        return 0;
+    int new_page = 0;
+    // If the page table is not present, create it!
+    if ( !page_is_present(*pde) ) {
+        vm_mngr_alloc_frame(pde);
+        new_page = 1;
+    }
     
-    kernelpt_region_bitmap[bit_index/32] |= 1 << bit_index%32;
+    // Get the frame address of the page table
+    uint32_t pt_physical_addr = page_get_frame_addr(*pde);
 
-    virt_addr addr = bit_index * BLOCK_SIZE + 0xffc00000;
+/* Add the mapping to the page table */
 
-    return addr;
+    // No page table is mapped! So, to add the mapping from va to pa to it, we need to first map it to the virtual address space with the help of the mapped utility page
+
+    // Pointer to the utility page
+    uint32_t *util_pt = (uint32_t*)0xC0100000;
+
+    // Map the page table to 0xFFC00000 so that we can modify it through writing to the virtual address from 0xFFC00000 to 0xFFC01000 (4K)
+    page_install_frame_addr(util_pt, pt_physical_addr);
+    page_add_attrib(util_pt, PAGE_PRESENT | PAGE_WRITABLE);
+
+    // Pointer to the page table
+    uint32_t *pt = (uint32_t*)0xFFC00000;
+    // Clear the newly created page table
+    if (new_page)
+        mem_set((char*)pt, 0, BLOCK_SIZE);
+
+    // Pointer to the page table entry
+    uint32_t *pte = pt + va_get_page_index(va);
+
+    // Install the page table entry
+    page_install_frame_addr(pte, pa);
+    page_add_attrib(pte, PAGE_PRESENT | PAGE_WRITABLE);
+
+    // Clear the utility page (umapping the page table)
+    *util_pt = 0;
 }
 
-void kernelpt_region_free_pg(virt_addr va)
+void
+vm_mngr_higher_kernel_unmap(uint32_t va)
 {
-    int block_index = (va - 0xffc00000) / BLOCK_SIZE;
+    // Pointer to the page directory
+    uint32_t *pd = cur_pd_addr;
 
-    kernelpt_region_bitmap[block_index/32] &= ~(1 << block_index%32);
+    // Pointer to the page directory entry (page table directiry is always mapped, NO page fault in accessing it!)
+    uint32_t *pde = cur_pd_addr + va_get_dir_index(va);
+
+    // If page table is not present, return
+    if ( !page_is_present(*pde) )
+        return;
+
+    // Get the frame address of the page table
+    uint32_t pt_physical_addr = page_get_frame_addr(*pde);
+
+/* Deleting the mapping from the page table */
+    // Map the page table to 0xFFC00000 so that we can modify it through writing to the virtual address from 0xFFC00000 to 0xFFC01000 (4K)
+
+    // Pointer to the utility page
+    uint32_t *util_pt = (uint32_t*)0xC0100000;
+    // Map
+    page_install_frame_addr(util_pt, pt_physical_addr);
+    page_add_attrib(util_pt, PAGE_PRESENT | PAGE_WRITABLE);
+
+    // Pointer to the page table
+    uint32_t *pt = (uint32_t*)0xFFC00000;
+
+    // Pointer to the page table entry
+    uint32_t *pte = pt + va_get_page_index(va);
+
+    // Delete the page table entry
+    page_del_attrib(pte, PAGE_PRESENT);
+
+    // Scan the page table, if no pages present, remove the page table
+    for (; (uint32_t)pt < 0xFFC01000; pt++)
+        if ( page_is_present(*pt) )
+            break;
+    
+    if ((uint32_t)pt == 0xFFC01000)
+        vm_mngr_free_frame(pde);
+
+    // Clear the utility page (umapping the page table)
+    *util_pt = 0;
 }

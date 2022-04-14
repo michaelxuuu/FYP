@@ -1,7 +1,7 @@
 #ifndef IDT_H
 #define IDT_H
 
-#include "stdint.h"
+#include "../include/type.h"
 #include "pic.h"
 
 // Interrupt Descriptor Table -> 256 vectors

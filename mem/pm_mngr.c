@@ -38,7 +38,7 @@ mem_bitmap_find_free() {
     return -1;
 }
 
-physical_addr
+uint32_t
 pm_mngr_alloc_block() {
 
     // Find in the bitmap the bit that corresponds to the first available block (frame)
@@ -59,7 +59,7 @@ pm_mngr_alloc_block() {
 }
 
 void
-pm_mngr_free_block(physical_addr pa) {
+pm_mngr_free_block(uint32_t pa) {
 
     // Calculate the bit
     int bit_index = pa / BLOCK_SIZE;
@@ -77,7 +77,7 @@ pm_mngr_init() {
     for (; i < 8; i++)
         mem_bitmap[i] = 0xFFFFFFFF;
 
-    // Mark all the memory higher than 512KB as free
+    // Mark all the memory higher than 1M as free
     for (; i < 1024; i++)
         mem_bitmap[i] = 0x0;
 }

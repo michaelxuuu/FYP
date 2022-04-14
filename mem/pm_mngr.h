@@ -1,7 +1,7 @@
 #ifndef PM_MNGR_H
 #define PM_MNGR_H
 
-#include<stdint.h>
+#include "../include/type.h"
 
 /*=======================================================================
 *
@@ -128,18 +128,16 @@ int mem_bitmap_find_free();
 
 /*=========================  PHYSICAL MANAGER ALLOCATOR  ============================*/
 
-typedef uint32_t physical_addr;
-
 /**
  * Allocate a block to use
  * Returns the physical address of the block if available frames exit or 0 if not
  */
-physical_addr pm_mngr_alloc_block();
+uint32_t pm_mngr_alloc_block();
 
 /**
  * Frees an alocated block
  */
-void pm_mngr_free_block(physical_addr pa);
+void pm_mngr_free_block(uint32_t pa);
 
 /**
  * Initilze the physical memory manager (mainly to mark the first 512K in use)

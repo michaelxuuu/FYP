@@ -215,6 +215,8 @@ gdt_ptr:
     .word gdt_ptr - null_descritpor - 1
     .long null_descritpor
 
+.global gdt_ptr
+
 /* Switch to protected mode! */
 enter32:
     /**
@@ -235,7 +237,7 @@ enter32:
     mov %cr0, %eax
     or $0x1, %eax
     mov %eax, %cr0
-    /* Enable A20 address line */
+    /* Enter the protected mode */
     ljmpl $kernel_code_selector_temp, $init32
     /* Jump to choosing the kernel code segment withe the offset instructed by the label 'init_pm' */
 
@@ -256,7 +258,7 @@ init32:
     mov $0xC00b8000, %edi
     add $320, %edi
     call prt_str32
-    jmp _start
+    jmp _start // No jumping back or returning!
 
 prt_str32:
     mov $0x07, %ah

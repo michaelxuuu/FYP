@@ -1,67 +1,13 @@
 #ifndef VM_MNGR_H
 #define VM_MNGR_H
 
-#include <stdint.h>
+#include "../include/type.h"
 
 #include "pm_mngr.h"
 
-#include "./../kernel/util.h"
+#include "../Lib/util.h"
 
 #include "./../cpu/idt.h"
-
-/**
- * 
- * Kernel VIRTUAL Address Space Layout:
- * 
- * +----------------------------+   0x100000000     4G
- * |  Kernel Page Table         |   4M
- * +----------------------------+   0xffc00000
- * |  Kernel Stack              |   4M
- * +----------------------------+   0xff800000
- * |                            |       ^
- * |                            |       |
- * |                            |       |
- * |                            |   Unmapped (to map, use sbrk)
- * |                            |       |
- * |                            |       |
- * |  Kernel Heap               |       V
- * +----------------------------+   0xC0100000
- * |  Video Rom                 |   512K
- * +----------------------------+   0xC0080000
- * |  Kernel Code               |   512K
- * +----------------------------+   0xC0000000
- * 
- * Physical Memory Layout:
- * 
- * +----------------------------+   128M
- * |                            |
- * |  Free                      |
- * +----------------------------+   0x900000
- * |  Kernel Page Table         |   4M (20K in use without idantity mapping disabled)
- * +----------------------------+   0x500000
- * |  Kernel Stack              |   4M
- * +----------------------------+   0x100000
- * |  Video Rom                 |   512K
- * +----------------------------+   0x80000
- * |  Kernel Code               |   512K
- * +----------------------------+   0x0
- * 
- *  
- */
-
-#define KERNEL_STACK_VIRT_BASE 0xffc00000
-#define KERNEL_STACK_VIRT_LIMI 0xff800000
-#define KERNEL_STACK_PHY_BASE 0x100000
-#define KERNEL_STACK_PHY_LIMI 0x500000
-#define KERNEL_STACK_SIZE 0x400000
-
-#define KERNEL_PAGE_TABLE_VIRT_BASE 0xffc00000
-#define KERNEL_PAGE_TABLE_VIRT_LIMI 0x100000000
-#define KERNEL_PAGE_TABLE_PHY_BASE 0x500000
-#define KERNEL_PAGE_TABLE_PHY_LIMI 0x900000
-#define KERNEL_PAGE_TABLE_SIZE 0x400000
-
-#define KERNEL_HEAP_BASE 0xC0100000
 
 /*===================================================================
  * One way to create the mapping table between the virtual pages
@@ -148,22 +94,20 @@
 *  Some functions that help manipulate the 32-bit virtual addresses
 */
 
-typedef uint32_t virt_addr;
-
 /**
  * Retrieve the page directory index given a virtual (linear) address
  */
-int va_get_dir_index(virt_addr va);
+int va_get_dir_index(uint32_t va);
 
 /**
  * Retrieve the page table index given a virtual (linear) address
  */
-int va_get_page_index(virt_addr va);
+int va_get_page_index(uint32_t va);
 
 /**
  * Retrieve the page table offset given a virtual (linear) address
  */
-int va_get_page_offset(virt_addr va);
+int va_get_page_offset(uint32_t va);
 
 /*===================================================================
  * 
@@ -237,8 +181,6 @@ int va_get_page_offset(virt_addr va);
  * Below provides an abstract interface for the management of Page Table Entries
  */
 
-typedef uint32_t pte;
-
 #define PAGE_PRESENT           0b00000000000000000000000000000001
 #define PAGE_WRITABLE          0b00000000000000000000000000000010
 #define PAGE_USER              0b00000000000000000000000000000100
@@ -249,47 +191,47 @@ typedef uint32_t pte;
 /**
  * Set certain bits in the PTE to add attributes to a page
  */
-void page_add_attrib(physical_addr* ptr_to_pte, int attrib);
+void page_add_attrib(uint32_t* ptr_to_pte, int attrib);
 
 /**
  * Clear certain bits in the PTE to delete attributes of a page
  */
-void page_del_attrib(physical_addr* ptr_to_pte, int attrib);
+void page_del_attrib(uint32_t* ptr_to_pte, int attrib);
 
 /**
  * Install frame addess field in the PTE to assign a physical memory for a page
  */
-void page_install_frame_addr(physical_addr* ptr_to_pte, physical_addr frame_addr);
+void page_install_frame_addr(uint32_t* ptr_to_pte, uint32_t frame_addr);
 
 /**
  * Test if the page is present (in the main memory)
  * Returns TRUE if present, or 0 if not
  */
-int page_is_present(physical_addr pte_addr);
+int page_is_present(uint32_t pte);
 
 /**
  * Test if the page is used by the user
  * Returns TRUE if used by the user, or 0 if used by kernel
  */
-int page_is_user(physical_addr pte_addr);
+int page_is_user(uint32_t pte);
 
 /**
  * Test if the page is has been accessed
  * Returns TRUE if accessed, or 0 if not
  */
-int page_is_accessed(physical_addr pte_addr);
+int page_is_accessed(uint32_t pte);
 
 /**
  * Test if the page is has been marked as dirty
  * Returns TRUE if dirty, or 0 if not
  */
-int page_is_dirty(physical_addr pte_addr);
+int page_is_dirty(uint32_t pte);
 
 /**
  * Test if the page is has been marked as dirty
  * Returns the physical address of the frame
  */
-physical_addr page_get_frame_addr(physical_addr pte_addr);
+uint32_t page_get_frame_addr(uint32_t pte);
 
 /*===========================  VIRTUAL MEMORY MANAGER  ==========================*/
 
@@ -299,48 +241,37 @@ physical_addr page_get_frame_addr(physical_addr pte_addr);
  * can fetch the current page directory address easily without having to read it out
  * from cr3 using a separate routing coded in raw assambly instructions. 
  */
-extern physical_addr cur_pd_addr; // Defined in vm_mngr.c
 
 /**
  * Load the page directory address to PDBR
  */
-void vm_mngr_load_pd(physical_addr pd_addr);
+void vm_mngr_load_pd(uint32_t pd_physical_addr);
 
 /**
  * Assign physical memory to a page
  * Returns the frame address of the page if successful or 0 if not
  */
-physical_addr vm_mngr_alloc_frame(pte* ptr_to_pte);
+uint32_t vm_mngr_alloc_frame(uint32_t* ptr_to_pte);
 
 /**
  * Free the physical memory allocated for the page
  */
-void vm_mngr_free_frame(pte* ptr_to_ptr);
+void vm_mngr_free_frame(uint32_t* ptr_to_ptr);
 
 /**
  * Map the physical address to the virtual address on a 4K basis (1 block at a time)
  */
-void vm_mngr_map(physical_addr pa, virt_addr va);
+void vm_mngr_map_segmentation(uint32_t pa, uint32_t va);
 
 /**
  * 1. Identity map the kernel so that the execution of the current code won't be affacted when enabling the paging
  * 2. Map the kernel to 3GB virtual to make a higher half kernel
+ * 3. Set up the kernel address space
  */
 void vm_mngr_init();
 
-void vm_mngr_enable_paging(int enable);
+void vm_mngr_higher_kernel_map(uint32_t va, uint32_t pa);
 
-void page_fault();
-
-void flush_tlb_entry(virt_addr va);
-
-//=====================================================================================================
-extern uint32_t kernelpt_region_bitmap[32];
-
-int kernelpt_region_bitmap_find_free();
-
-virt_addr kernelpt_region_alloc_pg();
-
-void kernelpt_region_free_pg(virt_addr va);
+void vm_mngr_higher_kernel_unmap(uint32_t va);
 
 #endif

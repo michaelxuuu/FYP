@@ -1,7 +1,7 @@
 #ifndef LOW_LEVEL_H
 #define LOW_LEVEL_H
 
-#include "./../kernel/util.h"
+#include "../Lib/util.h"
 
 unsigned char port_byte_in(unsigned short port);
 

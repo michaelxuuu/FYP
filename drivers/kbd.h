@@ -1,33 +1,32 @@
 #ifndef KBD_H
 #define KBD_H
 
-#include<stdint.h>
+#include"../include/type.h"
 
 #include"low_level.h"
 
 #include"../cpu/comn_hdlr.h"     // Register irq1 handler
 
-#include"../kernel/util.h"
+#include"../Lib/util.h"
 
 #include"screen.h"
 
+#include"../kernel/kprintf.h"
 
-enum ps2_controller_ports
-{
-    PS2_CONTROLLER_PORT_DATA    = 0x60, // also used to interact with PS/2 devices - keyboard (encoder)/ mouse
-    PS2_CONTROLLER_PORT_CMD     = 0x64,
-    PS2_CONTROLLER_PORT_STATUS  = 0x64
-};
+
+// ps2 controller ports
+#define PS2_CONTROLLER_PORT_DATA   0x60 // also used to interact with PS/2 devices - keyboard (encoder)/ mouse
+#define PS2_CONTROLLER_PORT_CMD    0x64
+#define PS2_CONTROLLER_PORT_STATUS 0x64
+
 
 /**
  * Status byte is obtained by reading 0x64, showing status of the PS/2 controller
  * Unused status omitted, see the complete version at https://wiki.osdev.org/%228042%22_PS/2_Controller
  */
-enum ps2_controller_status
-{
-    PS2_CONTROLLER_STATUS_OUTBUF_FULL = 0x1, // must be set before reading from 0x60
-    PS2_CONTROLLER_STATUS_INBUF_FULL  = 0x2  // must be clear before writing to 0x60 and 0x64
-};
+// ps2 controller status
+#define PS2_CONTROLLER_STATUS_OUTBUF_FULL 0x1 // must be set before reading from 0x60
+#define PS2_CONTROLLER_STATUS_INBUF_FULL  0x2 // must be clear before writing to 0x60 and 0x64
 
 uint8_t ps2_controller_get_status(); // Read the controller's status register
 
@@ -177,6 +176,6 @@ extern int scan_code_map[]; // Map a particular make code to a key
  */
 uint8_t get_printable_char();
 
-void key_stroke_action(); // Ttanslates a key stroke to certain actions on the screen, such as printing/ deleting a character
+void key_stroke_action(); // Ttanslates a key stroke to certain actions shown on the screen, such as printing/ deleting a character
 
 #endif

@@ -257,7 +257,7 @@ uint8_t get_printable_char()
                 }
             }
         }
-        // If shift is not held down but the capslock is active
+        // If shift is not being held down but the capslock is active
         else if (kbd.capslock) {
             if (isLetter(kbd.key)) {
                 c = kbd.key - 32;
@@ -287,11 +287,11 @@ void key_stroke_action()
                 break;
 
             case KBD_KEY_BACKSPACE:
-                if (get_cursor() != 0)
+                if (get_cursor_offset() != 0)
                 {
-                    set_cursor(get_cursor() - 2);
+                    set_cursor(get_cursor_offset() - 2);
                     putchar(' ');
-                    set_cursor(get_cursor() - 2);
+                    set_cursor(get_cursor_offset() - 2);
                 }
                 break;
 
@@ -304,21 +304,21 @@ void key_stroke_action()
                 break;
 
             case KBD_KEY_UP:
-                if (get_cursor() > 79 * 2)
-                    set_cursor(get_cursor() - 80 * 2);
+                if (get_cursor_offset() > 79 * 2)
+                    set_cursor(get_cursor_offset() - 80 * 2);
                 break;
 
             case KBD_KEY_DOWN:
-                set_cursor(handle_scrolling(get_cursor() + 80 * 2));
+                set_cursor(handle_scrolling(get_cursor_offset() + 80 * 2));
                 break;
             
             case KBD_KEY_LEFT:
-                if (get_cursor() > 0)
-                    set_cursor(get_cursor() - 2);
+                if (get_cursor_offset() > 0)
+                    set_cursor(get_cursor_offset() - 2);
                 break;
 
             case KBD_KEY_RIGHT:
-                set_cursor(handle_scrolling(get_cursor() + 2));
+                set_cursor(handle_scrolling(get_cursor_offset() + 2));
                 break;
 
             case KBD_KEY_F1:
@@ -382,5 +382,5 @@ void keyboard_init()
     register_handler(33, kbd_callback); // Valid hander must be registered before initializing the encoder or irq1 caused by the response byte will lead to page fault (handler address being 0x0)
 
     kbd.alt = kbd.ctrl = kbd.shift = 0;
-    kbd.scrolllock = 0;
+    kbd.capslock = 0;
 }
