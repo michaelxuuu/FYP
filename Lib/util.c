@@ -42,7 +42,7 @@ int iToStr(long i, char * s, int num) {
         s[0] = '0';
         ++ct;
     }
-    else 
+    else
     {
         for (long base = 1; temp_i >= base; base *= 10, ct++)
             // Deviding a decimal number by base 10 can be seen as shifting it left by 1 decimal digit

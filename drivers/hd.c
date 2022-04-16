@@ -1,13 +1,13 @@
 #include"hd.h"
 
-void ata_read_blocks(uint32_t lba, uint8_t* buf, uint8_t block_ct)
+void ata_read_sectors(uint32_t lba, uint8_t* buf, uint8_t sectorct)
 {
     // LBA is 28 bits
     if (lba & 0xF0000000)
         return;
 
     // Specify how many sectors to read
-    port_byte_out(ATA_PORT_SECT_CT, block_ct);
+    port_byte_out(ATA_PORT_SECT_CT, sectorct);
 
     // Send 28bit LBA byte by byte from port 0x1f3 to 0x1f7
     port_byte_out(ATA_PORT_LBA_0_7, (uint8_t)lba);
@@ -29,17 +29,26 @@ void ata_read_blocks(uint32_t lba, uint8_t* buf, uint8_t block_ct)
     if (status & 0x01)
         return;
 
-    for (int i = 0; i < 256; i++, buf += 2)
-        *((uint16_t*)buf) = port_word_in(ATA_PORT_DATA); // Cast it to a pointer that points to 16bit data
+    for (int i = 0; i < sectorct; i++) {
+        for (int j = 0; j < 256; j++, buf += 2)
+            *((uint16_t*)buf) = port_word_in(ATA_PORT_DATA); // Cast it to a pointer that points to 16bit data
+        // Test if the disk/ controller is ready
+        // by iteratively checking the status - 4th bit being 1 -> ready, 7th bit being one -> not ready
+        while (status = port_byte_in(ATA_PORT_CMD) & 0x80); // Waits if not ready
+
+        // Error
+        if (status & 0x01)
+            return;
+    }
 }
 
-void ata_write_blocks(uint8_t* buf, uint32_t lba, uint8_t block_ct)
+void ata_write_sectors(uint8_t* buf, uint32_t lba, uint8_t sectorct)
 {
     // LBA is 28 bits
     if (lba & 0xF0000000)
         return;
     
-    port_byte_out(ATA_PORT_SECT_CT, block_ct);
+    port_byte_out(ATA_PORT_SECT_CT, sectorct);
 
     port_byte_out(ATA_PORT_LBA_0_7, (uint8_t)lba);
     port_byte_out(ATA_PORT_LBA_8_15, (uint8_t)(lba >> 8));
@@ -56,8 +65,17 @@ void ata_write_blocks(uint8_t* buf, uint32_t lba, uint8_t block_ct)
     if (status & 0x01)
         return;
 
-    for (int i = 0; i < 256; i++, buf += 2)
-        port_word_out(ATA_PORT_DATA, *((uint16_t*)buf));
+    for (int i = 0; i < sectorct; i++) {
+        for (int j = 0; j < 256; j++, buf += 2)
+            port_word_out(ATA_PORT_DATA, *((uint16_t*)buf));
+        // Test if the disk/ controller is ready
+        // by iteratively checking the status - 4th bit being 1 -> ready, 7th bit being one -> not ready
+        while (status = port_byte_in(ATA_PORT_CMD) & 0x80); // Waits if not ready
+
+        // Error
+        if (status & 0x01)
+            return;
+    }
 }
 
 void ata_flush()

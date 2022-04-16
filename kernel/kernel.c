@@ -8,6 +8,8 @@
 #include "kmalloc.h"
 #include "kprintf.h"
 #include "../fs/iocache.h"
+#include "../fs/fs.h"
+
 
 #define db(label) \
 		__asm__ volatile (label)
@@ -19,6 +21,8 @@ int _start() {
 	interrupt_init();
 	keyboard_init();
 	iocache_init();
+	fs_init();
+	fs_read();
 	for(;;);
 }
 

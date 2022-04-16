@@ -1,5 +1,5 @@
 #ifndef HD_H
-#define HC_H
+#define HD_H
 
 #include"../include/type.h"
 
@@ -23,9 +23,9 @@ enum ata_cmds
     ATA_CMD_FLUSH   = 0xE7
 };
 
-void ata_read_blocks(uint32_t first_block, uint8_t* buf, uint8_t block_ct);
+void ata_read_sectors(uint32_t lba, uint8_t* buf, uint8_t sectorct);
 
-void ata_write_blocks(uint8_t* buf, uint32_t first_block, uint8_t block_ct);
+void ata_write_sectors(uint8_t* buf, uint32_t lba, uint8_t sectorct);
 
 void ata_flush();
 

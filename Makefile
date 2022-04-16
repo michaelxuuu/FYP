@@ -26,7 +26,7 @@ debug32c: vhd boot_sect.elf kernel.elf
 				 -ex "symbol-file kernel.elf" \
 
 vhd: boot_sect.bin kernel.bin
-	dd bs=512 if=/dev/zero of=$@ count=1025
+	dd bs=1M if=/dev/zero of=$@ count=512
 	dd bs=512 if=$< of=$@ count=1 conv=notrunc
 	dd bs=512 if=kernel.bin of=$@ seek=1 count=1024 conv=notrunc
 

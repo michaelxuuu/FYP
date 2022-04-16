@@ -1,49 +1,87 @@
 #include"iocache.h"
 
-#define BUF_SIZE    1024
-#define BUF_NO      32
-
-typedef struct iobuf buf;
-
-struct iobuf
-{
-    int     blockno;
-    char    data[BUF_SIZE];
-    buf     *next;
-    buf     *prev;
-};
-
-typedef struct iocache
-{
-    buf bufs[BUF_NO];
-    buf *head;
-} cache;
+cache* iocache;
 
 // Initialize the io cache
 void iocache_init()
 {
-    cache *c = (cache*)kmalloc(sizeof(cache));
-    c->head->prev = c->head->next = c->head = c->bufs;
+    iocache = (cache*)kmalloc(sizeof(cache));
+    iocache->head->prev = iocache->head->next = iocache->head = iocache->bufs;
+    iocache->head->refct = 0;
 
-    buf *b = c->bufs + 1;
-    for (; b < c->bufs + BUF_NO; b++)
+    buf *b = iocache->bufs + 1;
+    for (; b < iocache->bufs + BUF_NO; b++)
     {
-        c->head->prev = b;
-        b->next = c->head;
+        b->refct = 0;
+        iocache->head->prev = b;
+        b->next = iocache->head;
         b->prev = b;
-        c->head = b;
+        iocache->head = b;
     }
     b--;
-    b->prev = c->bufs;
-    c->bufs->next = b;
+    b->prev = iocache->bufs;
+    iocache->bufs->next = b;
+}
 
-    for (int i = 0; i <32; i++)
-    {
-        (c->bufs[i]).data[0] = i;
-    }
+buf* bget(uint32_t blockno)
+{
+    buf *b = iocache->bufs;
 
-    for (b = c->head; b != c->bufs; b = b->next)
-    {
-        printf("%d ", b->data[0]);
+    // Is the block already cached?
+    for (b = iocache->head->prev; b != iocache->head; b = b->prev)
+        // Cached: set head to 'b', and return head
+        if (b->blockno == blockno) 
+        {
+            b->refct++;
+            return b;
+        }
+
+    // Not cached? Recycle the least recently used buffer not in use to buffer the block requested
+    for (b = iocache->head->prev; b != iocache->head; b = b->prev)
+        if (!b->refct) // Not in use
+        {
+            b->blockno = blockno;
+            b->refct = 1;
+            b->valid = 0;
+            return b;
+        }
+
+    // Out of buffers -> panic
+    return 0;
+}
+
+buf* bread(uint32_t blockno)
+{   
+    buf *b = bget(blockno);
+    if(!b->valid) {
+        ata_read_sectors((b->blockno) * 8, b->data, 8);
+        b->valid = 1;
     }
+    return b;
+}
+
+void bwrite(buf *b)
+{
+  ata_write_sectors(b->data, (b->blockno) * 8, 8);
+}
+
+void brelease(buf *b)
+{
+    b->refct--;
+
+    if (b == iocache->head)
+        return;
+
+    // b->prev <=> b->next
+    b->prev->next = b->next;
+    b->next->prev = b->prev;
+
+    // head->prev <=> b <=> head
+    iocache->head->prev->next = b;
+    b->prev = iocache->head->prev;
+    iocache->head->prev = b;
+    b->next = iocache->head;
+
+    // Set 'b' as head
+    iocache->head = b;
 }
