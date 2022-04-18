@@ -1,4 +1,4 @@
-SRC = $(wildcard kernel/*.c drivers/*.c cpu/*.c mem/*.c Lib/*.c fs/*.c)
+SRC = $(wildcard kernel/*.c drivers/*.c cpu/*.c mem/*.c Lib/*.c fs/*.c user/*.c)
 OBJ = $(SRC:.c=.o cpu/hdlr_stub.o)
 
 all: run clean
@@ -12,6 +12,7 @@ debug16: vhd boot_sect.elf kernel.elf
 				 -ex "set tdesc filename .gdb_conf/target.xml" \
 				 -ex "target extended-remote localhost:1234" \
 				 -ex "symbol-file boot_sect.elf" \
+				 -ex "symbol-file kernel.elf" \
 
 debug32asm: vhd boot_sect.elf kernel.elf
 	qemu-system-i386 -s -S $< &
@@ -55,4 +56,4 @@ kernel_entry.o: boot/kernel_entry.s
 	i386-elf-as $^ -o $@
 
 clean:
-	rm -rf *.bin *.elf *.o vhd kernel/*.o cpu/*.o drivers/*.o mem/*.o Lib/*.o fs/*.o
+	rm -rf *.bin *.elf *.o vhd kernel/*.o cpu/*.o drivers/*.o mem/*.o Lib/*.o fs/*.o user/*.o

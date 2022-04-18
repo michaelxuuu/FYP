@@ -366,7 +366,7 @@ sys_ready:
     /* BIOS's IVT has been overwritten so intrrupts are now useless, thus we trun it off */
     mov $0x0, %ax
     mov %ax, %ds
-    ljmp $0x0, $0x3e
+    ljmp $0x0, $0x46
     /* Do a long jump to 0x0:46 to execute our system code. But why 46? See kernel_entry.s and compile it
     and use 'i386-elf-objdump -t' to inspect the symbol table to try to find symbol 'pm_init' */
 

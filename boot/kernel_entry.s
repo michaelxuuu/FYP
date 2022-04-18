@@ -152,8 +152,8 @@ kcode_descritpor_temp:
     .word 0xffff
     .word 0x0
     .byte 0x0
-    .byte 0b10011010 /* segment present = 1, privilege level = 00, descriptor type = 1(code or data), code = 1,  conforming = 0, readable = 1, AVL = 0 */
-    .byte 0b11001111 /* granularity(7) is 1 so that we can access the entire 4G memory */
+    .byte 0b10011010
+    .byte 0b11001111
     .byte 0x40
 
 /* kernel data segment descriptor */
@@ -166,12 +166,12 @@ kdata_descritpor_temp:
     .byte 0x40
 
 kcode_descritpor:
-    .word 0xffff
-    .word 0x0
-    .byte 0x0
-    .byte 0b10011010 /* segment present = 1, privilege level = 00, descriptor type = 1(code or data), code = 1,  conforming = 0, readable = 1, AVL = 0 */
-    .byte 0b11001111 /* granularity(7) is 1 so that we can access the entire 4G memory */
-    .byte 0x0
+    .word 0xffff        // seglim_0_15
+    .word 0x0           // base_0_15
+    .byte 0x0           // base_16_23
+    .byte 0b10011010    // low -> high: type (Accessed - 0, Code - 1, Conforming - 0, Readable - 1), descriptor_type - 1, Privilige - 00, Present - 1 
+    .byte 0b11001111    // low -> high: seg_lim_16_19 - 0b1111, AVL - 0, always_0 - 0, always_1 - 1, Granularity - 1
+    .byte 0x0           // base_24_31
 
 /* kernel data segment descriptor */
 kdata_descritpor:
@@ -200,15 +200,33 @@ udata_descritpor:
     .byte 0b11001111
     .byte 0x0
 
-.set kernel_code_selector_temp, kcode_descritpor_temp - null_descritpor
-.set kernel_data_selector_temp, kdata_descritpor_temp - null_descritpor
-.set kernel_code_selector, kcode_descritpor - null_descritpor
-.set kernel_data_selector, kdata_descritpor - null_descritpor
-.set user_code_selector, ucode_descritpor - null_descritpor
-.set user_data_selector, udata_descritpor - null_descritpor
+tss_descriptor:
+    .int 0
+    .int 0
 
-.global kernel_code_selector
-.global kernel_data_selector
+.set kcode_selector_temp, kcode_descritpor_temp - null_descritpor
+.set kdata_selector_temp, kdata_descritpor_temp - null_descritpor
+.set kcode_selector, kcode_descritpor - null_descritpor
+.set kdata_selector, kdata_descritpor - null_descritpor
+.set ucode_selector, ucode_descritpor - null_descritpor
+.set udata_selector, udata_descritpor - null_descritpor
+.set tss_selector, tss_descriptor - null_descritpor
+
+.global kcode_descritpor_temp
+.global kdata_descritpor_temp
+.global kcode_descritpor
+.global kdata_descritpor
+.global ucode_descritpor
+.global udata_descritpor
+.global tss_descriptor
+
+.global kcode_selector_temp
+.global kdata_selector_temp
+.global kcode_selector
+.global kdata_selector
+.global ucode_selector
+.global udata_selector
+.global tss_selector
 
 /* GDT pointer */
 gdt_ptr:
@@ -228,23 +246,23 @@ enter32:
      * 0xC0000000 + physical, the highest hex bit of 0xC should be excluded 
      * during loadind to yeild its physical address loaded into IDTR
      * 
-     * This is done easily using lidtw, where the suffix - w - tells indicates 
-     * a oprand size of 16 bits and to load the entire 24 bits of the diescriptor 
-     * base field to IDTR, which helps exclude the highest hex bit of 0xC
+     * This is done easily using lgdtw, where the suffix - w - tells indicates 
+     * a oprand size of 16 bits and to load the lower 24 bits of the diescriptor 
+     * base field to GDTR, which helps exclude the highest hex bit of 0xC
      */
-    lgdtw 0x38  // lgdtw -> the suffix tells the to load a 32 bit base not a 24 bit one which is indicated by suffix l if lgdtw were used
+    lgdtw 0x40  // lgdtw -> the suffix tells the to load a 32 bit base not a 24 bit one which is indicated by suffix l if lgdtw were used
     /* Load gdt to gdtr (a register pointing to gdt in the memory) */
     mov %cr0, %eax
     or $0x1, %eax
     mov %eax, %cr0
     /* Enter the protected mode */
-    ljmpl $kernel_code_selector_temp, $init32
+    ljmpl $kcode_selector_temp, $init32
     /* Jump to choosing the kernel code segment withe the offset instructed by the label 'init_pm' */
 
 .extern _start
 .code32
 init32:
-    mov $kernel_data_selector_temp, %ax
+    mov $kdata_selector_temp, %ax
     mov %ax, %ds
     mov %ax, %ss
     mov %ax, %es

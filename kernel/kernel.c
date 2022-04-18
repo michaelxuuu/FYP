@@ -9,6 +9,7 @@
 #include "kprintf.h"
 #include "../fs/iocache.h"
 #include "../fs/fs.h"
+#include "../user/tss.h"
 
 
 #define db(label) \
@@ -23,6 +24,7 @@ int _start() {
 	iocache_init();
 	fs_init();
 	fs_read();
+	install_tss();
 	for(;;);
 }
 

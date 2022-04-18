@@ -96,9 +96,9 @@ handle_exception:
     // save user/kernel data segement
     // kenel code segment is automatically loaded into cs register by the hardware when interrupts occur
     mov %ds, %ax
-    pushl %eax 
+    pushl %eax
     // load kernel ds
-    mov $kernel_data_selector, %ax
+    mov $kdata_selector, %ax
     mov %ax, %ds
     mov %ax, %es
     mov %ax, %fs
@@ -134,7 +134,7 @@ handle_irq:
     mov %ds, %ax
     pushl %eax 
     // load kernel ds
-    mov $kernel_data_selector, %ax
+    mov $kdata_selector, %ax
     mov %ax, %ds
     mov %ax, %es
     mov %ax, %fs

@@ -106,13 +106,15 @@ vm_mngr_free_frame(uint32_t* ptr_to_pte) {
     page_del_attrib(ptr_to_pte, PAGE_PRESENT);
 }
 
-uint32_t* cur_pd_addr;
+uint32_t* cur_pd;
+
+uint32_t* kernel_pd;
 
 void
 vm_mngr_lower_kernel_map(uint32_t va, uint32_t pa)
 {
     // Pointer to the current page directory
-    uint32_t *pd = cur_pd_addr;
+    uint32_t *pd = cur_pd;
 
     // Pointer to the page directory entry
     uint32_t *pde = pd + va_get_dir_index(va);
@@ -152,11 +154,12 @@ vm_mngr_init() {
     mem_set((char*)(pm_mngr_alloc_block() + 0xC0000000), 0, BLOCK_SIZE);
 
     // Create a page directory table
-    cur_pd_addr = (uint32_t*)(pm_mngr_alloc_block() + 0xC0000000);
-    mem_set((char*)cur_pd_addr, 0, BLOCK_SIZE);
+    cur_pd = (uint32_t*)(pm_mngr_alloc_block() + 0xC0000000);
+    kernel_pd = cur_pd;
+    mem_set((char*)cur_pd, 0, BLOCK_SIZE);
 
     // Load the PHYSICAL address of the page directory to the PDBR (HENCE minus 0xC0000000)
-    vm_mngr_load_pd((uint32_t)cur_pd_addr - 0xC0000000);
+    vm_mngr_load_pd((uint32_t)cur_pd - 0xC0000000);
 
     // Identity map the first 1M
     for (uint32_t pa = 0x0; pa < 0x100000; pa += BLOCK_SIZE)
@@ -173,8 +176,8 @@ vm_mngr_init() {
     // Map the utility page to 0xC0100000
     vm_mngr_lower_kernel_map(0xC0100000, 0x500000);
     // Link the utility page table to the last PDE in the directory table
-    page_install_frame_addr(cur_pd_addr + 1023, 0x500000);
-    page_add_attrib(cur_pd_addr + 1023, PAGE_PRESENT | PAGE_WRITABLE);
+    page_install_frame_addr(cur_pd + 1023, 0x500000);
+    page_add_attrib(cur_pd + 1023, PAGE_PRESENT | PAGE_WRITABLE);
 
     // Map the kernel page directory to 0xC0101000
     vm_mngr_lower_kernel_map(0xC0101000, 0x501000);
@@ -199,9 +202,9 @@ vm_mngr_init() {
          * and to load the entire 32-bit the diescriptor base field to GDTR
          */
         "lgdtl gdt_ptr;" // lgdtl -> the suffix tells the to load a 32 bit base not a 24 bit one which is indicated by suffix w if lgdtw were used
-        "ljmpl $kernel_code_selector, $switch_gdt;"
+        "ljmpl $kcode_selector, $switch_gdt;"
         "switch_gdt:;"
-        "mov $kernel_data_selector, %ax;"
+        "mov $kdata_selector, %ax;"
         "mov %ax, %ds;"
         "mov %ax, %ss;"
         "mov %ax, %es;"
@@ -235,15 +238,15 @@ vm_mngr_init() {
     );
 
     // Update the current page diretory pointer (have it point to the mapped PD in 3G virtual)
-    cur_pd_addr = (uint32_t*)0xC0101000;
+    cur_pd = (uint32_t*)0xC0101000;
 
 /* Discard the lower kernel */
 
     // Delete the first page table
-    vm_mngr_free_frame(cur_pd_addr);
+    vm_mngr_free_frame(cur_pd);
 
     // Delete the page directory entry
-    page_del_attrib(cur_pd_addr, PAGE_PRESENT);
+    page_del_attrib(cur_pd, PAGE_PRESENT);
     
     // Flush the TLB
     for (int i = 0, va = 0; i < 256; i++, va += 4096)
@@ -254,10 +257,10 @@ void
 vm_mngr_higher_kernel_map(uint32_t va, uint32_t pa)
 {
     // Pointer to the page directory
-    uint32_t *pd = cur_pd_addr;
+    uint32_t *pd = cur_pd;
 
     // Pointer to the page directory entry (page table directiry is always mapped, NO page fault in accessing it!)
-    uint32_t *pde = cur_pd_addr + va_get_dir_index(va);
+    uint32_t *pde = cur_pd + va_get_dir_index(va);
 
     int new_page = 0;
     // If the page table is not present, create it!
@@ -301,10 +304,10 @@ void
 vm_mngr_higher_kernel_unmap(uint32_t va)
 {
     // Pointer to the page directory
-    uint32_t *pd = cur_pd_addr;
+    uint32_t *pd = cur_pd;
 
     // Pointer to the page directory entry (page table directiry is always mapped, NO page fault in accessing it!)
-    uint32_t *pde = cur_pd_addr + va_get_dir_index(va);
+    uint32_t *pde = cur_pd + va_get_dir_index(va);
 
     // If page table is not present, return
     if ( !page_is_present(*pde) )
