@@ -1,47 +1,115 @@
 #include"proc.h"
 
-typedef struct proc proc;
+procqueue *pq;
 
-struct proc
+// Link proc to the end of queue of proc's (fifo)
+void link_proc(proc *p)
 {
-    int id;
-    uint32_t esp, ebp, eip;
-    uint32_t *pd;
-     
-    proc *next;
-    proc *prev;
-};
+    if (!pq->proc_ct)
+    {   // first proc
+        pq->head = p->next = p->prev = p;
+        return;
+    }
 
-extern uint32_t *cur_pd;        // defined in vm_mngr.c
+    // head->prev <=> p <=> head
 
-extern uint32_t *kernel_pd;     // defined in vm_mngr.c
+    // head->prev <=> p
+    pq->head->prev->next = p;
+    p->prev = pq->head->prev;
 
-typedef struct queue
-{
-    proc *cur;
-    proc *head;
-}queue;
-
-queue *readyqueue;
-
-int nextid = 0;
-
-void multiprocing_init()
-{
-    readyqueue = (queue*)kmalloc(sizeof(queue));
-    // Create first proc which is the kernel proc
-    readyqueue->head->id = nextid++;
-    readyqueue->head = (proc*)kmalloc(sizeof(proc));
-    readyqueue->head->esp = 0; // regs initialized to 0s and will be assigned with valid values during swicthing (leaving current proc) 
-    readyqueue->head->ebp = 0;
-    readyqueue->head->eip = 0;
-    readyqueue->head->pd = cur_pd;
-    readyqueue->head->next = readyqueue->head;
-    readyqueue->head->prev = readyqueue->head;
+    // p <=> head
+    p->next = pq->head;
+    pq->head->prev = p;
 }
 
-void copy_pt(uint32_t *src, uint32_t *dest)
+uint32_t nextid = 0;
+
+void proc_zero_context(proc *p)
 {
+    p->con.esp = 0;
+    p->con.ebp = 0;
+    p->con.eip = 0;
+    p->con.edi = 0;
+    p->con.esi = 0;
+    p->con.eax = 0;
+    p->con.ebx = 0;
+    p->con.ecx = 0;
+    p->con.edx = 0;
+}
+
+void proc_init()
+{
+    __asm__ volatile ("cli;");
+    // create a proc queue
+    pq = (procqueue*)kmalloc(sizeof(procqueue));
+    pq->cur = pq->head = pq->proc_ct = 0;
+
+    // create proc address space which will be passed to the first proc
+    // proc text
+    vm_mngr_higher_kernel_map(0, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+    // proc heap
+    vm_mngr_higher_kernel_map(4096, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+    // proc stack
+    vm_mngr_higher_kernel_map(0xC0000000 - 0x1000, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+
+
+    extern uint8_t firstproc_start;
+    extern uint8_t firstproc_end;
+    
+    // wirte executable binaries into the page which will then be executed
+    __asm__ volatile 
+    (
+        "jmp firstproc_end;"
+        "firstproc_start:;"
+        ".global firstproc_start;"
+        "mov $0, %eax;"
+        "int $0;"       // test user interrupt!!!
+        "firstproc_end:;"
+        ".global firstproc_end;"
+    );
+    
+    mem_copy(&firstproc_start, (uint8_t*)0x0, (&firstproc_end) - (&firstproc_start));
+
+    // first proc
+    cur_proc = create_proc();
+
+    // execute first proc
+    goto_user();
+}
+
+uint32_t get_pd_physical_addr(proc *p)
+{
+    // get pgae table physical addr
+    uint32_t pt_phy_addr = page_get_frame_addr(kernel_pd[va_get_dir_index((uint32_t)p->pd)]);
+
+    // map the page table address through utility page
+    uint32_t *util_pt = (uint32_t*)0xC0100000;
+    // Map the src pt to 0xFFC00000 so that we can modify it through writing to the virtual address from 0xFFC00000 to 0xFFC00fff (4K)
+    page_install_frame_addr(util_pt, pt_phy_addr);
+    page_add_attrib(util_pt, PAGE_PRESENT | PAGE_WRITABLE);
+
+    // Pointer to the page table
+    uint32_t *pt = (uint32_t*)0xFFC00000;
+
+    // get frame's addr (physical)
+    uint32_t frame_addr = page_get_frame_addr(pt[va_get_page_index((uint32_t)p->pd)]);
+
+    __asm__ volatile ("invlpg (%0);" :: "r"(0xFFC00000));
+
+    // Plus the offset is the physical address of the page directory
+    return frame_addr + va_get_page_offset((uint32_t)p->pd);
+
+    
+}
+
+// pt is inherited from the parent proc... which is the currently running proc
+void proc_alloc_pt(proc *child)
+{
+    uint32_t *src = cur_proc->pd;
+    if (nextid == 0);
+        src = cur_pd;
+    uint32_t *dest = child->pd;
+
     // Create a page diretcory
     dest = (uint32_t*)kmalloc(4096);
 
@@ -50,7 +118,7 @@ void copy_pt(uint32_t *src, uint32_t *dest)
         dest[i] = src[i];
 
     // Copy each page table if allocated
-    for (uint32_t *pde = 0; pde < dest + 1024; pde++)
+    for (uint32_t *pde = dest; pde < dest + 1024; pde++)
     {
         if (!page_is_present(*pde))
             continue;
@@ -71,58 +139,103 @@ void copy_pt(uint32_t *src, uint32_t *dest)
         page_install_frame_addr(util_pt, src_pt_physical_addr);
         page_add_attrib(util_pt, PAGE_PRESENT | PAGE_WRITABLE);
         // Map the src pt to 0xFFC01000 so that we can modify it through writing to the virtual address from 0xFFC01000 to 0xFFC01fff (4K)
-        page_install_frame_addr(util_pt, dest_pt_physical_addr);
-        page_add_attrib(util_pt, PAGE_PRESENT | PAGE_WRITABLE);
+        page_install_frame_addr(util_pt + 1, dest_pt_physical_addr);
+        page_add_attrib(util_pt + 1, PAGE_PRESENT | PAGE_WRITABLE);
 
         // Pointer to the src page table
         uint32_t *src_pt = (uint32_t*)0xFFC00000;
 
         // Pointer to the dest page table
         uint32_t *dest_pt = (uint32_t*)0xFFC01000;
-        
+
         // Copy!
+        // No previlige changing needed here since we are copying only the pages above 0xC0000000 which is the kernel space!
         for (int i = 0; i < 1024; i++)
             dest_pt[i] = src_pt[i];
 
         // Clear the utility page (umapping the page tables)
         *util_pt = 0;
         *(util_pt + 1) = 0;
+
+        // flush tlb
+        __asm__ volatile ("invlpg (%0);" :: "r"(0xFFC00000));
+        __asm__ volatile ("invlpg (%0);" :: "r"(0xFFC01000));
     }
 }
 
-void destory_py(uint32_t *pt)
+void proc_destory_pt(proc *p)
 {
-    for (uint32_t *pde; pde < pt + 1024; pde++)
+    for (uint32_t *pde; pde < p->pd + 1024; pde++)
         pm_mngr_free_block(page_get_frame_addr(*pde));
-    kfree(pt);
+    kfree(p->pd);
 }
 
-proc *cur_proc;
-
-int create_proc()
+void proc_assign_id(proc *p)
 {
-    proc *paren = cur_proc;
-
-    uint32_t *child_pt;
-
-    copy_pt(paren->pd, child_pt);
-
-    // Create child process
-    proc *child = (proc*)kmalloc(sizeof(proc));
-
-    child->id  = nextid++;
-    child->esp = 0; // regs initialized to 0s and will be assigned with valid values during swicthing (leaving current proc) 
-    child->ebp = 0;
-    child->eip = 0;
-    child->pd = child_pt;
-
-    // head->prev <=> child <=> head
-    readyqueue->head->prev->next = child;
-    child->prev = readyqueue->head->prev;
-    child->next = readyqueue->head;
-    readyqueue->head->prev = child;
-
-    return child->id;
+    p->id = nextid++;
 }
 
+void proc_assign_paren(proc *p)
+{
+    p->parent = cur_proc;
+}
 
+proc *cur_proc = 0; // pointer to the currently running process
+
+proc* create_proc()
+{
+    proc *child = (proc*)kmalloc(sizeof(proc));
+    if (pq->proc_ct); // first proc use the kernel pt
+    {
+        proc_alloc_pt(child);
+        child->pd = kernel_pd;
+    }
+    proc_assign_id(child);
+    proc_zero_context(child);
+    proc_assign_paren(child);
+    link_proc(child);
+    pq->proc_ct++;
+    return child;
+}
+
+void proc_save_context(proc *p, irq_reg_info *r)
+{
+
+    p->con.esp = r->useresp;
+    p->con.ebp = r->ebp;
+    p->con.eip = r->eip;
+    p->con.edi = r->edi;
+    p->con.esi = r->esi;
+    p->con.eax = r->eax;
+    p->con.ebx = r->ebx;
+    p->con.ecx = r->ecx;
+    p->con.edx = r->edx;
+}
+
+void proc_load_context(proc *p, irq_reg_info *r)
+{
+    r->useresp = p->con.esp;
+    r->ebp = p->con.ebp;
+    r->eip = p->con.eip;
+    r->edi = p->con.edi;
+    r->esi = p->con.esi;
+    r->eax = p->con.eax;
+    r->ebx = p->con.ebx;
+    r->ecx = p->con.ecx;
+    r->edx = p->con.edx;
+}
+
+void swtch(irq_reg_info *r)
+{
+    if (!cur_proc)
+        return;
+    // save current
+    proc_save_context(cur_proc, r);
+    // next proc
+    cur_proc = cur_proc->next;
+    // restore context
+    proc_load_context(cur_proc, r);
+    // load pdbr
+    uint32_t pd_physical_addr = get_pd_physical_addr(cur_proc);
+    vm_mngr_load_pd(pd_physical_addr);
+}

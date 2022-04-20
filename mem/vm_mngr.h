@@ -270,7 +270,7 @@ void vm_mngr_map_segmentation(uint32_t pa, uint32_t va);
  */
 void vm_mngr_init();
 
-void vm_mngr_higher_kernel_map(uint32_t va, uint32_t pa);
+void vm_mngr_higher_kernel_map(uint32_t va, uint32_t pa, uint32_t attrib);
 
 void vm_mngr_higher_kernel_unmap(uint32_t va);
 

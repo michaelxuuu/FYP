@@ -277,13 +277,13 @@ void key_stroke_action()
     uint8_t c = get_printable_char();
 
     if (c)
-        printf("%c", c);
+        kprintf("%c", c);
     else // Not a printable key, is a control key
     {
         switch (kbd.key)
         {
             case KBD_KEY_TAB:
-                printf("    ");
+                kprintf("    ");
                 break;
 
             case KBD_KEY_BACKSPACE:
@@ -300,7 +300,7 @@ void key_stroke_action()
                 break;
 
             case KBD_KEY_CAPSLOCK:
-                printf("capslock enabled\n");
+                kprintf("capslock enabled\n");
                 break;
 
             case KBD_KEY_UP:
@@ -322,51 +322,51 @@ void key_stroke_action()
                 break;
 
             case KBD_KEY_F1:
-                printf("F1\n");
+                kprintf("F1\n");
                 break;
             
             case KBD_KEY_F2:
-                printf("F2\n");
+                kprintf("F2\n");
                 break;
 
             case KBD_KEY_F3:
-                printf("F3\n");
+                kprintf("F3\n");
                 break;
 
             case KBD_KEY_F4:
-                printf("F4\n");
+                kprintf("F4\n");
                 break;
             
             case KBD_KEY_F5:
-                printf("F5\n");
+                kprintf("F5\n");
                 break;
 
             case KBD_KEY_F6:
-                printf("F6\n");
+                kprintf("F6\n");
                 break;
 
             case KBD_KEY_F7:
-                printf("F7\n");
+                kprintf("F7\n");
                 break;
             
             case KBD_KEY_F8:
-                printf("F8\n");
+                kprintf("F8\n");
                 break;
 
             case KBD_KEY_F9:
-                printf("F9\n");
+                kprintf("F9\n");
                 break;
 
             case KBD_KEY_F10:
-                printf("F10\n");
+                kprintf("F10\n");
                 break;
             
             case KBD_KEY_F11:
-                printf("F11\n");
+                kprintf("F11\n");
                 break;
 
             case KBD_KEY_F12:
-                printf("F12\n");
+                kprintf("F12\n");
                 break;
 
             default:

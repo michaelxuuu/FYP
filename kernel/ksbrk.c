@@ -30,7 +30,7 @@ uint32_t ksbrk(int inc)
 
     for (int i = 0; i < block_ct; i++, break_addr = inc > 0 ? break_addr + 4096 : break_addr - 4096)
         if (inc > 0)
-            vm_mngr_higher_kernel_map(break_addr, pm_mngr_alloc_block());
+            vm_mngr_higher_kernel_map(break_addr, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE);
         else if (break_addr == KERNEL_HEAP_BASE) // Stop freeing heap pages when hitting the heap base
                 return KERNEL_HEAP_BASE;
         else 

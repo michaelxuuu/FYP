@@ -239,6 +239,7 @@ vm_mngr_init() {
 
     // Update the current page diretory pointer (have it point to the mapped PD in 3G virtual)
     cur_pd = (uint32_t*)0xC0101000;
+    kernel_pd = cur_pd;
 
 /* Discard the lower kernel */
 
@@ -254,7 +255,7 @@ vm_mngr_init() {
 }
 
 void
-vm_mngr_higher_kernel_map(uint32_t va, uint32_t pa)
+vm_mngr_higher_kernel_map(uint32_t va, uint32_t pa, uint32_t attrib)
 {
     // Pointer to the page directory
     uint32_t *pd = cur_pd;
@@ -266,6 +267,7 @@ vm_mngr_higher_kernel_map(uint32_t va, uint32_t pa)
     // If the page table is not present, create it!
     if ( !page_is_present(*pde) ) {
         vm_mngr_alloc_frame(pde);
+        page_add_attrib(pde, attrib);
         new_page = 1;
     }
     
@@ -287,17 +289,21 @@ vm_mngr_higher_kernel_map(uint32_t va, uint32_t pa)
     uint32_t *pt = (uint32_t*)0xFFC00000;
     // Clear the newly created page table
     if (new_page)
-        mem_set((char*)pt, 0, BLOCK_SIZE);
+        for (int i = 0; i < 1024; i++)
+            pt[i] = 0;
 
     // Pointer to the page table entry
     uint32_t *pte = pt + va_get_page_index(va);
 
     // Install the page table entry
     page_install_frame_addr(pte, pa);
-    page_add_attrib(pte, PAGE_PRESENT | PAGE_WRITABLE);
+    page_add_attrib(pte, attrib);
 
     // Clear the utility page (umapping the page table)
     *util_pt = 0;
+
+    // flush tlb
+    __asm__ volatile ("invlpg (%0);" :: "r"(pt));
 }
 
 void
@@ -344,4 +350,8 @@ vm_mngr_higher_kernel_unmap(uint32_t va)
 
     // Clear the utility page (umapping the page table)
     *util_pt = 0;
+
+    // flush tlb
+    __asm__ volatile ("invlpg (%0);" :: "r"(va));
+    __asm__ volatile ("invlpg (%0);" :: "r"(0xFFC00000));
 }

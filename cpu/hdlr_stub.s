@@ -67,6 +67,8 @@ EXCEPTION_WITHOUT_ERRCODE 29  // Reserved
 EXCEPTION_WITHOUT_ERRCODE 30  // Reserved
 EXCEPTION_WITHOUT_ERRCODE 31  // Reserved
 
+EXCEPTION_WITHOUT_ERRCODE 128  // SYSCALL
+
 // IRQ's
 // Each interrupt line of IRQ corresponds to one signle IRQ
 // At total: 15 types of interrupt (error code 0 to 15)
@@ -143,6 +145,7 @@ handle_irq:
     // call C-level handler
     pushl %esp // pass parameter
     call _irq_handler
+irq_back:
     pop %eax
 
     // restore user/kernel ds

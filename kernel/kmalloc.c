@@ -29,7 +29,7 @@ void* kmalloc(uint32_t size)
 
     hole *h = 0; // Will point to the first hole that fits
 
-    uint32_t size_left = 0; // If a hole is only to be taken up partilly, then the rest of it would form a new hole, and this variable holds the size of that induced hole
+    int size_left = 0; // If a hole is only to be taken up partilly, then the rest of it would form a new hole, and this variable holds the size of that induced hole
 
     if (break_addr == KERNEL_HEAP_BASE) // Firs allocation
     {
@@ -54,7 +54,7 @@ void* kmalloc(uint32_t size)
         // Not found
         if (!h)
         {
-            h = (hole*)ksbrk(size);
+            h = (hole*)ksbrk(size + HOLE_HEADER_SIZE);
             h->free = 0;
             h->next = 0;
             h->size = size;
@@ -73,7 +73,7 @@ void* kmalloc(uint32_t size)
     }
 
     // If the size left in the hole is sufficient for the creation of another hole, we create a new hole to take over the space left
-    if (size_left > HOLE_HEADER_SIZE)
+    if (size_left > (int)HOLE_HEADER_SIZE)
     {
         hole *new_hole = (hole*)((uint32_t)h + HOLE_HEADER_SIZE + size);
         new_hole->free = 1;

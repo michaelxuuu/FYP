@@ -66,6 +66,7 @@ extern void int_44();
 extern void int_45();
 extern void int_46();
 extern void int_47();
+extern void int_128();
 
 // Define idt gate
 typedef struct idt_gate
@@ -98,7 +99,7 @@ extern idt_descriptor idt_descriptor_sturct;
 void load_idtr();
 
 // Function that registers an IDT gate with a handler in IDT
-void register_idt_gate(int gate_num, uint32_t handler_addr);
+void register_idt_gate(int gate_num, uint32_t handler_addr, int syscall);
 
 // Function that registers the all of the idt gates
 void install_idt();

@@ -164,7 +164,7 @@ void print_spaces(int num){
         putchar(' ');
 }
 
-void printf(const char * fromat, ...) {
+void kprintf(const char * fromat, ...) {
     const char * iter = fromat;
     va_list args;
     va_start(args, fromat);

@@ -41,11 +41,11 @@ uint32_t interrupt_handlers[256];
 
 // A common exception handler (gets called from the asm)
 void _exception_handler(excp_reg_info *r) {
-    printf("Interrupt: %s\n", exception_msgs[r->int_no]);
+    kprintf("Interrupt: %s\n", exception_msgs[r->int_no]);
     if (r->int_no <= 31) { // exception
         // divison by 0
         if (r->int_no == 0) {
-            printf("Panic!");
+            kprintf("Panic!");
             __asm__ volatile("hlt");
         }
     }
@@ -54,9 +54,9 @@ void _exception_handler(excp_reg_info *r) {
 // A common irq handler (gets called from the asm)
 void _irq_handler(irq_reg_info *r) 
 {
-    if (r->int_no == 32)
-        ;
-        // printf("External Interrupt: Timer\n");
+    if (r->int_no == 32) {
+        ((void(*)(irq_reg_info *))(interrupt_handlers[32]))(r);
+    }
     else if (r->int_no == 33) {
         ((void(*)(irq_reg_info *))(interrupt_handlers[33]))(r);
     }
