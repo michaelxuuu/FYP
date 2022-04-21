@@ -17,6 +17,8 @@
 
 #include"../user/proc.h"
 
+#include"../kernel/ksbrk.h"
+
 void syscall_init();
 
 void register_syscall(int syscallno, void *func);

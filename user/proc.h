@@ -39,6 +39,7 @@ typedef struct proc
     context con;    // context (register state)
     proc *parent;   // parent proc
     dirent wdir;
+    uint32_t brk_addr;
 
     proc *next;
     proc *prev;

@@ -27,6 +27,7 @@ debug32c: vhd boot_sect.elf kernel.elf
 	qemu-system-i386 -s -S $< &
 	i386-elf-gdb -ex "target extended-remote localhost:1234" \
 				 -ex "symbol-file kernel.elf" \
+				 -ex "add-symbol-file testprog/shell.elf" \
 
 vhd: boot_sect.bin kernel.bin
 	dd bs=1M if=/dev/zero of=$@ count=512
@@ -61,4 +62,4 @@ kernel_entry.o: boot/kernel_entry.s
 	i386-elf-as $^ -o $@
 
 clean:
-	rm -rf *.bin *.elf *.o vhd kernel/*.o cpu/*.o drivers/*.o mem/*.o Lib/*.o fs/*.o user/*.o testprog/*.o testprog/*.bin testprog/lib/*.o testprog/lib/*.a
+	rm -rf *.bin *.elf *.o vhd kernel/*.o cpu/*.o drivers/*.o mem/*.o Lib/*.o fs/*.o user/*.o testprog/*.o testprog/*.bin testprog/*.elf testprog/lib/*.o testprog/lib/*.a

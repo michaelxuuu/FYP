@@ -203,6 +203,12 @@ void proc_load_text(proc *p, char* path)
     brelease(b);
 }
 
+
+void proc_brk_init(proc *p)
+{
+    p->brk_addr = 4096;
+}
+
 proc* create_proc()
 {
     proc *child = (proc*)kmalloc(sizeof(proc));
@@ -217,6 +223,7 @@ proc* create_proc()
     proc_assign_id(child);
     proc_set_context(child);
     proc_assign_paren(child);
+    proc_brk_init(child);
     link_proc(child);
     if (!pq->proc_ct)
     {

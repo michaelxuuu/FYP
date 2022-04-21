@@ -34,13 +34,13 @@ void syscall_handler(int_reg_info *r)
     // do not use the below way of calling in which the args will be pushed onto the stack instead of passed via registers
     // syscalls[r->eax];
 
-    // restore the stack
-    for (int i = 0; i < 5; i++)
-        __asm__ volatile ("pop %eax;");
-
     // obtain return val from eax and overwrite the user eax pushed onto the kernel stack
     // so that when we have switched back to the user space, eax contains the return value of the syscall
     __asm__ volatile ("mov %%eax, %0":"=r"(r->eax));
+
+    // restore the stack
+    for (int i = 0; i < 5; i++)
+        __asm__ volatile ("pop %eax;");
 }
 
 void syscall_prints()
@@ -85,6 +85,45 @@ dirent* syscall_open()
     kfree(f);
 }
 
+extern uint32_t* cur_pd;
+
+#define USER_HEAP_BASE 4096
+
+void syscall_sbrk()
+{
+
+    cur_pd = cur_proc->pd;
+    uint32_t ubreak_addr = cur_proc->brk_addr;
+
+    int      inc;
+    __asm__ volatile ( "mov %%edi, %0;" : "=r"(inc) );
+    
+    uint32_t prior_break = ubreak_addr;
+
+    uint32_t block_ct = 0; // number of blocks to allocate or free
+
+    if (inc > 0)
+        block_ct = inc % 4096 > 0 ? inc / 4096 + 1 : inc / 4096; // Round up if grow
+    else
+        block_ct = -inc / 4096; // Round down if shrink
+
+    for (int i = 0; i < block_ct; i++, ubreak_addr = inc > 0 ? ubreak_addr + 4096 : ubreak_addr - 4096)
+        if (inc > 0)
+            vm_mngr_higher_kernel_map(ubreak_addr, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+        else if (ubreak_addr == USER_HEAP_BASE) // Stop freeing heap pages when hitting the heap base
+        {
+                __asm__ volatile ( "mov %0, %%eax;" :: "r"(ubreak_addr) );
+                return;
+        }
+        else 
+            vm_mngr_higher_kernel_unmap(ubreak_addr - 1);
+
+    cur_proc->brk_addr = ubreak_addr;
+
+    // return to eax
+    __asm__ volatile ( "mov %0, %%eax;" :: "r"(prior_break) );
+}
+
 void syscall_init()
 {
     register_handler(128, syscall_handler);
@@ -92,4 +131,5 @@ void syscall_init()
     register_syscall(0, syscall_prints);
     register_syscall(1, syscall_printc);
     register_syscall(2, syscall_open);
+    register_syscall(3, syscall_sbrk);
 }
