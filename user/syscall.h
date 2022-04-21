@@ -13,6 +13,10 @@
 
 #include"../cpu/idt.h"
 
+#include"../fs/fs.h"
+
+#include"../user/proc.h"
+
 void syscall_init();
 
 void register_syscall(int syscallno, void *func);

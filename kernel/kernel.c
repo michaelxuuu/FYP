@@ -12,6 +12,7 @@
 #include "../fs/fs.h"
 #include "../user/tss.h"
 #include "../user/proc.h"
+#include "../user/syscall.h"
 
 
 #define db(label) \
@@ -25,14 +26,9 @@ int _start() {
 	timer_init(50);
 	keyboard_init();
 	iocache_init();
-	// __asm__
-    // (
-    //     "mov %cr3, %eax;"
-    //     "mov %eax, %cr3;"
-    // );
 	fs_init();
-	fs_read();
+	// fs_read();
+	syscall_init();
 	proc_init();
 	for(;;);
 }
-

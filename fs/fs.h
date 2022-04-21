@@ -11,6 +11,35 @@
 
 #include"iocache.h"
 
+#define MAX_BLOCK 0x20000  // 512M/4K  = 128K
+#define MAX_SECTR 0x100000 // 512M/512 = 1M
+
+#define MAGIC_SECTNO 1025
+#define FAT_SECTNO 1032
+#define ROOTDIR_SECTNO 2056
+#define USABLE_SECTNO 2088
+
+#define FAT_BLOCKNO 129
+#define ROOTDIR_BLCOKNO 257
+#define USABLE_BLOCKNO 261
+
+#define DIRENT_ATTRIB_USED 0x1
+#define DIRENT_ATTRIB_USER 0x2
+#define DIRENT_ATTRIB_DIR 0x4
+#define DIRENT_ATTRIB_DEVICE 0x8
+
+#define DIRENT_PER_BLOCK 128 // 4K/32
+
+typedef struct dirent
+{
+
+    uint8_t name[23];
+    uint8_t attrib;
+    uint32_t blockno;
+    uint32_t size;
+
+} __attribute__((packed)) dirent;
+
 /**
  * 
  * We implement FAT file system here
@@ -29,13 +58,48 @@
  * 
  */
 
-/**
- * Initializing the hard dive and creating the aforemetioned divisions
- */
+void dirent_set_name(dirent *e, char *name);
+
+void dirent_set_attrib(dirent *e, uint8_t attrib);
+
+void dirent_set_blockno(dirent *e, uint32_t blockno);
+
+void dirent_set_size(dirent *e, uint32_t size);
+
+extern dirent sys_root_dir;
+
+/* -------------------------------Funstions that help manage the File Allocation Table------------------------------- */
+void fat_set_next(uint32_t blockno, uint32_t next);
+
+uint32_t fat_get_next(uint32_t blockno);
 
 void fs_init();
-void fs_read();
-void fs_add_dir(uint32_t dirblockno, char *name);
-uint32_t fs_find(uint32_t dirblockno, char *path);
+/* -------------------------------Funstions that help manage the free space------------------------------- */
+uint32_t get_first_free_block();
+
+uint32_t get_free_size();
+
+void set_first_free_block(uint32_t blockno);
+
+void set_free_size(uint32_t size);
+
+// Reduce the number of free space blocks by 'ct' (by 'advancing' the starting block of the free space)
+// Returns the prior starting block of the free space
 uint32_t get_free_blocks(uint32_t ct);
+
+dirent* dir_lookup(dirent *d, char *name, uint8_t attrib);
+
+// Takes the path and recursively locate the file starting from the given diretory 'start_dir'
+// Returns the starting block of the file
+dirent* fs_find_in(dirent *d, char *path, uint8_t attrib);
+
+// Add an entry of another directory to the specified directory
+void fs_add_dir_at(dirent* d, char *name);
+
+dirent* fs_find(char *p, uint8_t attrib);
+
+void fs_add_file_at(dirent* d, char *name, uint8_t attrib);
+
+void fs_read();
+
 #endif

@@ -33,7 +33,8 @@ char* exception_msgs[] = {
     "Reserved",
     "Reserved",
     "Reserved",
-    "Reserved"
+    "Reserved",
+    [0x80] = "syscall"
 };
 
 // This is a GLOBAL array, storing the addresses of intrrupt handlers defined elsewhere (in their respect .c files)
@@ -41,13 +42,17 @@ uint32_t interrupt_handlers[256];
 
 // A common exception handler (gets called from the asm)
 void _exception_handler(excp_reg_info *r) {
-    kprintf("Interrupt: %s\n", exception_msgs[r->int_no]);
     if (r->int_no <= 31) { // exception
+        kprintf("Interrupt: %s\n", exception_msgs[r->int_no]);
         // divison by 0
         if (r->int_no == 0) {
             kprintf("Panic!");
             __asm__ volatile("hlt");
         }
+    }
+    else // syscall
+    {
+        ((void(*)(excp_reg_info *))interrupt_handlers[128])(r);
     }
 }
 
@@ -55,10 +60,10 @@ void _exception_handler(excp_reg_info *r) {
 void _irq_handler(irq_reg_info *r) 
 {
     if (r->int_no == 32) {
-        ((void(*)(irq_reg_info *))(interrupt_handlers[32]))(r);
+        ((void(*)(irq_reg_info *))interrupt_handlers[32])(r);
     }
     else if (r->int_no == 33) {
-        ((void(*)(irq_reg_info *))(interrupt_handlers[33]))(r);
+        ((void(*)(irq_reg_info *))interrupt_handlers[33])(r);
     }
     pic_send_EOI(r->irq_no);
 }

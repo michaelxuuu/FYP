@@ -9,35 +9,6 @@
  *
  */
 
-#define MAX_BLOCK 0x20000  // 512M/4K  = 128K
-#define MAX_SECTR 0x100000 // 512M/512 = 1M
-
-#define MAGIC_SECTNO 1025
-#define FAT_SECTNO 1032
-#define ROOTDIR_SECTNO 2056
-#define USABLE_SECTNO 2088
-
-#define FAT_BLOCKNO 129
-#define ROOTDIR_BLCOKNO 257
-#define USABLE_BLOCKNO 261
-
-#define DIRENT_ATTRIB_USED 0x1
-#define DIRENT_ATTRIB_USER 0x2
-#define DIRENT_ATTRIB_DIR 0x4
-#define DIRENT_ATTRIB_DEVICE 0x8
-
-#define DIRENT_PER_BLOCK 128 // 4K/32
-
-typedef struct dirent
-{
-
-    uint8_t name[23];
-    uint8_t attrib;
-    uint32_t blockno;
-    uint32_t size;
-
-} __attribute__((packed)) dirent;
-
 /* -------------------------------Funstions that help manage the Directory Entries------------------------------- */
 void dirent_set_name(dirent *e, char *name)
 {
@@ -60,8 +31,6 @@ void dirent_set_size(dirent *e, uint32_t size)
 }
 
 dirent sys_root_dir;
-
-dirent cur_dir;
 
 /* -------------------------------Funstions that help manage the File Allocation Table------------------------------- */
 void fat_set_next(uint32_t blockno, uint32_t next)
@@ -132,9 +101,6 @@ void fs_init()
             dirent_set_attrib(&sys_root_dir, DIRENT_ATTRIB_USED);
             dirent_set_blockno(&sys_root_dir, freeblock);
             dirent_set_size(&sys_root_dir, 4);
-
-            // Set the current directory to the system root directory
-            cur_dir = sys_root_dir; 
         }
         bwrite(b);
         brelease(b);
@@ -143,6 +109,9 @@ void fs_init()
     // Set  magic byte
     magic[0] = 0xff;
     ata_write_sectors(magic, MAGIC_SECTNO, 1);
+
+    // add a file
+    fs_add_file_at(&sys_root_dir, "shell.bin", DIRENT_ATTRIB_USED);
 }
 
 /* -------------------------------Funstions that help manage the free space------------------------------- */
@@ -195,32 +164,35 @@ uint32_t get_free_blocks(uint32_t ct)
     return prior;
 }
 
-uint32_t dir_lookup(uint32_t dirblockno, char *name)
+dirent* dir_lookup(dirent *d, char *name, uint8_t attrib)
 {
-    buf *b = bread(dirblockno);
+    buf *b = bread(d->blockno);
 
     dirent *p = (dirent *)b->data;
 
-    uint32_t blockno = 0;
-
-    int len = str_len(name);
-
     int i = 0;
     for (; i < DIRENT_PER_BLOCK; i++)
-        if (str_cmp(p[i].name, name, len) == 0)
-        {
-            blockno = p[i].blockno;
-            break;
-        }
+    {
+        if (str_len(p[i].name) == str_len(name))
+            if (str_cmp(p[i].name, name, str_len(name)) == 0 && p[i].attrib == attrib)
+                break;
+    }
 
     brelease(b);
 
-    return blockno;
+    if (i != DIRENT_PER_BLOCK)
+    {
+        dirent *f = (dirent*)kmalloc(sizeof(dirent));
+        *f = p[i];
+        return f;
+    }
+
+    return 0;
 }
 
 // Takes the path and recursively locate the file starting from the given diretory 'start_dir'
 // Returns the starting block of the file
-uint32_t fs_find(uint32_t dirblockno, char *path)
+dirent* fs_find_in(dirent *d, char *path, uint8_t attrib)
 {
     int len = str_len(path);
     char *p = kmalloc(len);
@@ -232,15 +204,15 @@ uint32_t fs_find(uint32_t dirblockno, char *path)
             p[i] = 0;
 
     // current directory
-    uint32_t cur_dir_blockn = dirblockno;
+    dirent* cur_dir = d;
 
     for (char *name = p; name < p + len; name += str_len(name))
     {
         name += 1; // next name
 
-        cur_dir_blockn = dir_lookup(cur_dir_blockn, name);
+        cur_dir = dir_lookup(cur_dir, name, attrib);
 
-        if (!cur_dir_blockn)
+        if (!cur_dir)
         {
             kfree(p);
             return 0;
@@ -249,13 +221,13 @@ uint32_t fs_find(uint32_t dirblockno, char *path)
 
     kfree(p);
 
-    return cur_dir_blockn;
+    return cur_dir;
 }
 
 // Add an entry of another directory to the specified directory
-void fs_add_dir(uint32_t dirblockno, char *name)
+void fs_add_dir_at(dirent* d, char *name)
 {
-    buf *b = bread(dirblockno);
+    buf *b = bread(d->blockno);
     dirent *p = (dirent *)b->data;
 
     int i = 0;
@@ -284,15 +256,15 @@ void fs_add_dir(uint32_t dirblockno, char *name)
         mem_set((char*)p, 0, 4096);
 
         dirent_set_name(p, ".");
-        dirent_set_attrib(p, DIRENT_ATTRIB_USED);
+        dirent_set_attrib(p, DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR);
         dirent_set_blockno(p, free_blockno);
         dirent_set_size(p, 4);
 
         p++;
         dirent_set_name(p, "..");
-        dirent_set_attrib(p, cur_dir.attrib);
-        dirent_set_blockno(p, cur_dir.blockno);
-        dirent_set_size(p, cur_dir.size);
+        dirent_set_attrib(p, d->attrib);
+        dirent_set_blockno(p, d->blockno);
+        dirent_set_size(p, d->size);
 
         bwrite(b);
         brelease(b);
@@ -300,24 +272,44 @@ void fs_add_dir(uint32_t dirblockno, char *name)
     brelease(b);
 }
 
-uint32_t fs_find_(char *p)
+// Add an empty file to the specified directory (file fixed to 4K in size)
+void fs_add_file_at(dirent* d, char *name, uint8_t attrib)
 {
-    uint32_t bn = fs_find(cur_dir.blockno, p);
+    buf *b = bread(d->blockno);
+    dirent *p = (dirent *)b->data;
 
-    if (bn)
-        return bn;
-    
-    bn = fs_find(sys_root_dir.blockno, p);
+    int i = 0;
+    for (; i < DIRENT_PER_BLOCK; i++)
+    {
+        if ((p[i].attrib & DIRENT_ATTRIB_USED) == 0)
+            break;
+    }
 
-    return bn ? bn : 0;
+    if (i != DIRENT_PER_BLOCK)
+    {
+        p += i;
+        dirent_set_name(p, name);
+        dirent_set_attrib(p, DIRENT_ATTRIB_USED);
+        uint32_t free_blockno = get_free_blocks(1);
+        dirent_set_blockno(p, free_blockno);
+        fat_set_next(free_blockno, 0);
+        dirent_set_size(p, 4); // Diretcories are all 4K in size containing 32 32-byte directory entries
+    }
+    bwrite(b);
+    brelease(b);
 }
 
-void fs_read()
+dirent* fs_find(char *p, uint8_t attrib)
 {
-    fs_add_dir(sys_root_dir.blockno, "testdir");
-    uint32_t blo = fs_find_("/testdir");
-    fs_add_dir(blo, "test_subdir");
-    blo = fs_find_("/test/test_subdir");
-    fs_add_dir(blo, "deepestdir");
-    buf *b = bread(blo);
+    return fs_find_in(&sys_root_dir, p, attrib);
 }
+
+// void fs_read()
+// {
+//     fs_add_dir_at(&sys_root_dir, "test");
+//     dirent* d = fs_find("/test");
+//     fs_add_dir_at(d, "test_sub");
+//     d = fs_find("/test/test_sub");
+//     fs_add_dir_at(d, "deepestdir");
+//     buf *b = bread(d->blockno); // gdb: p b->data 
+// }

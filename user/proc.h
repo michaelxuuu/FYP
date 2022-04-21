@@ -15,6 +15,8 @@
 
 #include"tss.h"
 
+#include"../fs/fs.h"
+
 
 typedef struct context {
     uint32_t esp;
@@ -36,6 +38,7 @@ typedef struct proc
     uint32_t *pd;   // page directory (table)
     context con;    // context (register state)
     proc *parent;   // parent proc
+    dirent wdir;
 
     proc *next;
     proc *prev;

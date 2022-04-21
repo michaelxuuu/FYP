@@ -24,11 +24,11 @@ void link_proc(proc *p)
 
 uint32_t nextid = 0;
 
-void proc_zero_context(proc *p)
+void proc_set_context(proc *p)
 {
-    p->con.esp = 0;
-    p->con.ebp = 0;
-    p->con.eip = 0;
+    p->con.esp = 0xC0000000;
+    p->con.ebp = 0xC0000000;
+    p->con.eip = 0x0;
     p->con.edi = 0;
     p->con.esi = 0;
     p->con.eax = 0;
@@ -53,22 +53,24 @@ void proc_init()
     vm_mngr_higher_kernel_map(0xC0000000 - 0x1000, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
 
 
-    extern uint8_t firstproc_start;
-    extern uint8_t firstproc_end;
+    // extern uint8_t firstproc_start;
+    // extern uint8_t firstproc_end;
     
     // wirte executable binaries into the page which will then be executed
-    __asm__ volatile 
-    (
-        "jmp firstproc_end;"
-        "firstproc_start:;"
-        ".global firstproc_start;"
-        "mov $0, %eax;"
-        "int $0;"       // test user interrupt!!!
-        "firstproc_end:;"
-        ".global firstproc_end;"
-    );
+    // __asm__ volatile 
+    // (
+    //     "jmp firstproc_end;"
+    //     "firstproc_start:;"
+    //     ".global firstproc_start;"
+    //     ".string \"syscall0\";"
+    //     "mov $0, %eax;"
+    //     "mov $0, %edi;"
+    //     "int $128;"       // test user interrupt!!!
+    //     "firstproc_end:;"
+    //     ".global firstproc_end;"
+    // );
     
-    mem_copy(&firstproc_start, (uint8_t*)0x0, (&firstproc_end) - (&firstproc_start));
+    // mem_copy(&firstproc_start, (uint8_t*)0x0, (&firstproc_end) - (&firstproc_start));
 
     // first proc
     cur_proc = create_proc();
@@ -180,20 +182,45 @@ void proc_assign_paren(proc *p)
     p->parent = cur_proc;
 }
 
+void proc_assign_dir(proc *p)
+{
+    p->wdir = p->parent->wdir;
+}
+
 proc *cur_proc = 0; // pointer to the currently running process
+
+extern dirent sys_root_dir; // defined in fs.c
+
+void proc_load_text(proc *p, char* path)
+{
+    dirent *e = fs_find(path, DIRENT_ATTRIB_USED);
+    if (!e)
+        return;
+    buf *b = bread(e->blockno);
+    mem_copy(b->data, (char*)0x0, e->size * 1024);
+    kfree(e);
+    brelease(b);
+}
 
 proc* create_proc()
 {
     proc *child = (proc*)kmalloc(sizeof(proc));
-    if (pq->proc_ct); // first proc use the kernel pt
+    if (pq->proc_ct) // first proc use the kernel pt, no copying stack but alloc a 4K user stack space
     {
         proc_alloc_pt(child);
+    } else
+    {
         child->pd = kernel_pd;
+        child->wdir = sys_root_dir;
     }
     proc_assign_id(child);
-    proc_zero_context(child);
+    proc_set_context(child);
     proc_assign_paren(child);
     link_proc(child);
+    if (!pq->proc_ct)
+    {
+        proc_load_text(child, "/shell.bin");
+    }
     pq->proc_ct++;
     return child;
 }
