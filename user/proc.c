@@ -42,7 +42,8 @@ void proc_init()
     __asm__ volatile ("cli;");
     // create a proc queue
     pq = (procqueue*)kmalloc(sizeof(procqueue));
-    pq->cur = pq->head = pq->proc_ct = 0;
+    pq->cur = pq->head = 0;
+    pq->proc_ct = 0;
 
     // create proc address space which will be passed to the first proc
     // proc text

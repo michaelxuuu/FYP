@@ -1,8 +1,8 @@
-#include"stdio.h"
+#include"lib/stdio.h"
 
 int main()
 {
     char * s = "I am shell!";
-    PRINT(s);
+    printf("aasdad");
     for (;;);
 }

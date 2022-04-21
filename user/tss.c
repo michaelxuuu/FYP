@@ -131,7 +131,7 @@ void goto_user()
 		"or $3, %eax;"
 		"pushl %eax;"
 		// push esp
-		"pushl $0xC0000000;"
+		"pushl $0xbffffff8;"
 		// push flags
 		"pushf;"
 		"pop %eax;"

@@ -53,10 +53,13 @@ void fs_init()
 {
     // Check magic, file system exists already if magic byte being 0xFF
     // If there isn't a file system, we set it up
-    char magic[512];
-    ata_read_sectors(MAGIC_SECTNO, magic, 1);
-    if (magic[0])
+    dirent magic[512/sizeof(dirent)]; // evaluated during compilation time
+    ata_read_sectors(MAGIC_SECTNO, (char*)magic, 1);
+    if (((uint32_t*)magic)[0])
+    {
+        sys_root_dir = magic[0];
         return;
+    }
 
     // Create a file system
     // Create file allocation table and flush it to the hard drive one block
@@ -107,8 +110,8 @@ void fs_init()
     }
 
     // Set  magic byte
-    magic[0] = 0xff;
-    ata_write_sectors(magic, MAGIC_SECTNO, 1);
+    magic[0] = sys_root_dir;
+    ata_write_sectors((char*)magic, MAGIC_SECTNO, 1);
 
     // add a file
     fs_add_file_at(&sys_root_dir, "shell.bin", DIRENT_ATTRIB_USED);

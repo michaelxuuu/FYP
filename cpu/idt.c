@@ -24,7 +24,7 @@ extern uint32_t kcode_selector;
 
 void register_idt_gate(int gate_num, uint32_t handler_addr, int syscall) {
     idt[gate_num].handler_addr_low = low_16(handler_addr);
-    idt[gate_num].handler_seg_selector = &kcode_selector; // Marked as entern in .h file, defined in kernel_entry.s
+    idt[gate_num].handler_seg_selector = (uint8_t)((uint32_t)(&kcode_selector)); // Marked as entern in .h file, defined in kernel_entry.s
     idt[gate_num].always0 = 0;
     idt[gate_num].flags = syscall ? (0x8E | 0x60) : 0x8E;
     idt[gate_num].handler_addr_high = high_16(handler_addr);

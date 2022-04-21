@@ -30,7 +30,7 @@ void syscall_handler(int_reg_info *r)
     );
 
     // do syscall
-    __asm__ volatile ("call %0" :: "r"((uint32_t)syscalls[r->eax]));
+    __asm__ volatile ("call *%0" :: "r"((uint32_t)syscalls[r->eax]));
     // do not use the below way of calling in which the args will be pushed onto the stack instead of passed via registers
     // syscalls[r->eax];
 
@@ -43,7 +43,7 @@ void syscall_handler(int_reg_info *r)
     __asm__ volatile ("mov %%eax, %0":"=r"(r->eax));
 }
 
-void syscall_print()
+void syscall_prints()
 {
     // use only 1 reg containing str's starting addr
     char *s;
@@ -52,25 +52,35 @@ void syscall_print()
     kprintf(s);
 }
 
+void syscall_printc()
+{
+    // use only 1 reg containing the character
+    uint32_t c;
+    __asm__ volatile ("mov %%edi, %0":"=r"(c));
+    // call kprintf
+    putchar(c);
+}
+
+
 dirent* syscall_open()
 {
     // use 3 regs, name str addr, attrib, and ptr to user space struct to store the file info
-    char *name;
+    uint32_t name_addr;
     uint32_t attrib;
-    dirent *d;
+    uint32_t dirent_addr;
     __asm__ volatile 
     (
         "mov %%edi, %0;"
         "mov %%esi, %1;"
         "mov %%edx, %2;"
-        : "=r"((uint32_t)name), "=r"(attrib), "=r"((uint32_t)d)
+        : "=r"(name_addr), "=r"(attrib), "=r"(dirent_addr)
     );
     
-    dirent *f = fs_find_in(&(cur_proc->wdir), name, attrib);
+    dirent *f = fs_find_in(&(cur_proc->wdir), (char*)name_addr, attrib);
     if (!f)
         return 0;
     else
-        *d = *f;
+        *((dirent*)dirent_addr) = *f;
 
     kfree(f);
 }
@@ -79,6 +89,7 @@ void syscall_init()
 {
     register_handler(128, syscall_handler);
 
-    register_syscall(0, syscall_print);
-    register_syscall(1, syscall_open);
+    register_syscall(0, syscall_prints);
+    register_syscall(1, syscall_printc);
+    register_syscall(2, syscall_open);
 }
