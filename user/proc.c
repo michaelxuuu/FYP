@@ -47,9 +47,10 @@ void proc_init()
 
     // create proc address space which will be passed to the first proc
     // proc text
-    vm_mngr_higher_kernel_map(0, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+    for (int i = 0; i < 4; i++)
+        vm_mngr_higher_kernel_map(i * 4096, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
     // proc heap
-    vm_mngr_higher_kernel_map(4096, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+    vm_mngr_higher_kernel_map(0x4000, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
     // proc stack
     vm_mngr_higher_kernel_map(0xC0000000 - 0x1000, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
 
@@ -102,7 +103,6 @@ uint32_t get_pd_physical_addr(proc *p)
     // Plus the offset is the physical address of the page directory
     return frame_addr + va_get_page_offset((uint32_t)p->pd);
 
-    
 }
 
 // pt is inherited from the parent proc... which is the currently running proc
@@ -199,14 +199,49 @@ void proc_load_text(proc *p, char* path)
         return;
     buf *b = bread(e->blockno);
     mem_copy(b->data, (char*)0x0, e->size * 1024);
+    brelease(b);
+    b = bread(e->blockno + 1);
+    mem_copy(b->data, (char*)4096, e->size * 1024);
     kfree(e);
     brelease(b);
 }
 
+void proc_buf_init(proc *p)
+{
+    mem_set(p->inbuf.data, 0, 64);
+    p->inbuf.index = 0;
+    p->inbuf.ct = 0;
+}
+
+int proc_buf_read(proc *p)
+{
+    if (p->inbuf.ct == 0)
+        return -1;
+
+    int data = p->inbuf.data[p->inbuf.index];
+    p->inbuf.ct--;
+    p->inbuf.index--;
+    if (p->inbuf.index < 0)
+        p->inbuf.index = 0;
+    
+    return data;
+}
+
+void proc_buf_write(proc *p, int data)
+{
+    if (p->inbuf.ct == 64)
+        return;
+        
+    p->inbuf.ct++;
+    if (p->inbuf.ct == 1)
+        p->inbuf.index = 0;
+
+    p->inbuf.data[p->inbuf.index] = data;
+}
 
 void proc_brk_init(proc *p)
 {
-    p->brk_addr = 4096;
+    p->brk_addr = 0x4000;
 }
 
 proc* create_proc()
@@ -224,6 +259,7 @@ proc* create_proc()
     proc_set_context(child);
     proc_assign_paren(child);
     proc_brk_init(child);
+    proc_buf_init(child);
     link_proc(child);
     if (!pq->proc_ct)
     {

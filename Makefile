@@ -35,7 +35,7 @@ vhd: boot_sect.bin kernel.bin
 	dd bs=512 if=kernel.bin of=$@ seek=1 count=1024 conv=notrunc
 	make -C ./testprog/lib
 	make -C ./testprog
-	dd bs=4K if=./testprog/shell.bin of=vhd seek=$(FIRST_PROGRAM_BLOCK) count=1 conv=notrunc
+	dd bs=4K if=./testprog/shell.bin of=vhd seek=$(FIRST_PROGRAM_BLOCK) count=2 conv=notrunc
 
 kernel.elf: kernel_entry.o $(OBJ)
 	i386-elf-ld -Ttext 0xC0000000 -o $@  $^

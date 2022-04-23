@@ -30,6 +30,13 @@ typedef struct context {
     uint32_t edx;
 } context;
 
+typedef struct proc_inbuf
+{
+    int ct;
+    int index;
+    int data[64];
+} proc_inbuf;
+
 // This proc struct is managed by the kernel
 typedef struct proc proc;
 typedef struct proc
@@ -41,9 +48,10 @@ typedef struct proc
     dirent wdir;
     uint32_t brk_addr;
 
+    proc_inbuf inbuf;
     proc *next;
     proc *prev;
-}proc;
+} proc;
 
 extern uint32_t *cur_pd;        // defined in vm_mngr.c
 
@@ -81,5 +89,9 @@ extern proc *cur_proc; // pointer to the currently running process
 proc* create_proc();
 
 void swtch(irq_reg_info *r);
+
+int proc_buf_read(proc *p);
+
+void proc_buf_write(proc *p, int data);
 
 #endif

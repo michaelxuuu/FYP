@@ -276,99 +276,35 @@ void key_stroke_action()
     // Print a character onto the screen
     uint8_t c = get_printable_char();
 
-    if (c)
-        kprintf("%c", c);
+    if (c) {
+        proc_buf_write(cur_proc, c);
+    }
     else // Not a printable key, is a control key
     {
         switch (kbd.key)
         {
             case KBD_KEY_TAB:
-                kprintf("    ");
-                break;
-
             case KBD_KEY_BACKSPACE:
-                if (get_cursor_offset() != 0)
-                {
-                    set_cursor(get_cursor_offset() - 2);
-                    putchar(' ');
-                    set_cursor(get_cursor_offset() - 2);
-                }
-                break;
-
             case KBD_KEY_RET:
-                putchar('\n');
-                break;
-
             case KBD_KEY_CAPSLOCK:
-                kprintf("capslock enabled\n");
-                break;
-
             case KBD_KEY_UP:
-                if (get_cursor_offset() > 79 * 2)
-                    set_cursor(get_cursor_offset() - 80 * 2);
-                break;
-
             case KBD_KEY_DOWN:
-                set_cursor(handle_scrolling(get_cursor_offset() + 80 * 2));
-                break;
-            
             case KBD_KEY_LEFT:
-                if (get_cursor_offset() > 0)
-                    set_cursor(get_cursor_offset() - 2);
-                break;
-
             case KBD_KEY_RIGHT:
-                set_cursor(handle_scrolling(get_cursor_offset() + 2));
-                break;
-
             case KBD_KEY_F1:
-                kprintf("F1\n");
-                break;
-            
             case KBD_KEY_F2:
-                kprintf("F2\n");
-                break;
-
             case KBD_KEY_F3:
-                kprintf("F3\n");
-                break;
-
             case KBD_KEY_F4:
-                kprintf("F4\n");
-                break;
-            
             case KBD_KEY_F5:
-                kprintf("F5\n");
-                break;
-
             case KBD_KEY_F6:
-                kprintf("F6\n");
-                break;
-
             case KBD_KEY_F7:
-                kprintf("F7\n");
-                break;
-            
             case KBD_KEY_F8:
-                kprintf("F8\n");
-                break;
-
             case KBD_KEY_F9:
-                kprintf("F9\n");
-                break;
-
             case KBD_KEY_F10:
-                kprintf("F10\n");
-                break;
-            
             case KBD_KEY_F11:
-                kprintf("F11\n");
-                break;
-
             case KBD_KEY_F12:
-                kprintf("F12\n");
+                proc_buf_write(cur_proc, kbd.key);
                 break;
-
             default:
                 break;
         }

@@ -99,6 +99,28 @@ void fs_init()
             dirent_set_blockno(rootdir + 1, freeblock);
             dirent_set_size(rootdir + 1, 4);
 
+            bwrite(b);
+            brelease(b);
+
+            // Clear the buffer and add '.' and '..' to the newly created directory
+            b = bget(freeblock);
+            dirent *p = (dirent *)b->data;
+            mem_set((char*)p, 0, 4096);
+
+            dirent_set_name(p, ".");
+            dirent_set_attrib(p, DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR);
+            dirent_set_blockno(p, freeblock);
+            dirent_set_size(p, 4);
+
+            p++;
+            dirent_set_name(p, "..");
+            dirent_set_attrib(p, DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR);
+            dirent_set_blockno(p, freeblock);
+            dirent_set_size(p, 4);
+
+            bwrite(b);
+            brelease(b);
+
             // Install the system root diretcory
             dirent_set_name(&sys_root_dir, "root");
             dirent_set_attrib(&sys_root_dir, DIRENT_ATTRIB_USED);
@@ -176,9 +198,8 @@ dirent* dir_lookup(dirent *d, char *name, uint8_t attrib)
     int i = 0;
     for (; i < DIRENT_PER_BLOCK; i++)
     {
-        if (str_len(p[i].name) == str_len(name))
-            if (str_cmp(p[i].name, name, str_len(name)) == 0 && p[i].attrib == attrib)
-                break;
+        if (str_cmp(p[i].name, name) == 0 && p[i].attrib == attrib)
+            break;
     }
 
     brelease(b);

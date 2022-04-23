@@ -37,10 +37,10 @@ void putchar(char c)
 #define FOPEN(path, attrib, dirent_ptr) \
     __asm__ volatile \
     ( \
-        "mov $0x1, %%eax;" \
         "mov %0, %%edi;" \
         "mov %1, %%esi;" \
         "mov %2, %%edx;" \
+        "mov $0x2, %%eax;" \
         "int $0x80;" \
         :: "r"((int)path), "r"((int)attrib), "r"((int)dirent_ptr) \
     );
@@ -49,6 +49,65 @@ void putchar(char c)
 void fopen(char *path, uint32_t attrib, dirent* p)
 {
     FOPEN(path, attrib, p);
+}
+
+// read keyboard buffer 
+int read_kbd_buf()
+{
+    int ret;
+    __asm__ volatile
+    (
+        "mov $0x4, %%eax;"
+        "int $0x80;"
+        "mov %%eax, %0" : "=r"(ret)
+    );
+    return ret;
+}
+
+// move cursor
+// edi = 0 backspace
+// edi = 1 up
+// edi = 2 down
+// edi = 3 left
+// edi = 4 right
+void move_cursor(int option)
+{
+    __asm__ volatile 
+    (
+        "mov $0x5, %%eax;"
+        "mov %0, %%edi;"
+        "int $0x80;"
+        :: "b"(option)
+    );
+}
+
+// get current directory's path/ name
+// kernel writes the dir path/ name to s[22]
+void get_cur_dir(char *s)
+{
+    __asm__ volatile
+    (
+        "mov $0x6, %%eax;"
+        "mov %0, %%edi;"
+        "int $0x80;"
+        :: "b"((uint32_t)s)
+    );
+}
+
+// readdir
+void readdir(dirent *dir_to_read, dirent *dir_to_write, int index)
+{
+    if (index >= 1024)
+        return;
+    __asm__ volatile
+    (
+        "mov %0, %%edi;"
+        "mov %1, %%esi;"
+        "mov %2, %%edx;"
+        "mov $0x7, %%eax;"
+        "int $0x80;"
+        :: "r"((int)dir_to_read), "r"(index), "r"((int)dir_to_write)
+    );
 }
 
 // -----------------------------------  PRINTF  ----------------------------------------------
@@ -460,15 +519,16 @@ int isascii(int c)
 
 
 // =============================================================== STRING.H ===============================================================
-int str_cmp(const char * s1, const char * s2, int size) {
-    for (int i = 0; i < size; i++)
+int str_cmp(const char * s1, const char * s2) {
+    while (*s1 && *s2)
     {
-        if (s1[i] > s2[i])
-            return 1;
-        else if (s1[i] < s2[i])
-            return -1;
+        if (*s1 != *s2)
+            break;
+
+        s1++;
+        s2++;
     }
-    return 0;
+    return *(uint8_t*)s1 - *(uint8_t*)s2;
 }
 
 int str_len(const char * s1) {
@@ -479,7 +539,7 @@ int str_len(const char * s1) {
 
 // =============================================================== STDLIB.H ===============================================================
 
-#define USER_HEAP_BASE 4096
+#define USER_HEAP_BASE 0x4000
 
 typedef struct hole_header hole;
 struct hole_header

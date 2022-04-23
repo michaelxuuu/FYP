@@ -19,6 +19,8 @@
 
 #include"../kernel/ksbrk.h"
 
+#include"../drivers/screen.h"
+
 void syscall_init();
 
 void register_syscall(int syscallno, void *func);

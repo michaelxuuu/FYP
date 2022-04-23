@@ -12,7 +12,7 @@ all : $(BIN) $(OBJ) $(ELF)
 	i386-elf-ld $< -o $@ -Ttext 0x0 -e main -L. ./lib/libc.a
 
 %.o : %.c
-	i386-elf-gcc -c $< -o $@ -ffreestanding -g
+	i386-elf-gcc -c $< -o $@ -ffreestanding -g -e main -Ttext 0x0
 
 clean:
 	rm *.o *.bin

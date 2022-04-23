@@ -20,11 +20,11 @@ void syscall_handler(int_reg_info *r)
     __asm__ volatile
     (
         "\
-            push %0; \
-            push %1; \
-            push %2; \
-            push %3; \
-            push %4; \
+            mov %0, %%edi; \
+            mov %1, %%esi; \
+            mov %2, %%edx; \
+            mov %3, %%ecx; \
+            mov %4, %%ebx; \
         "
         :: "r" (r->edi), "r" (r->esi), "r" (r->edx), "r" (r->ecx), "r" (r->ebx)
     );
@@ -38,9 +38,6 @@ void syscall_handler(int_reg_info *r)
     // so that when we have switched back to the user space, eax contains the return value of the syscall
     __asm__ volatile ("mov %%eax, %0":"=r"(r->eax));
 
-    // restore the stack
-    for (int i = 0; i < 5; i++)
-        __asm__ volatile ("pop %eax;");
 }
 
 void syscall_prints()
@@ -62,7 +59,7 @@ void syscall_printc()
 }
 
 
-dirent* syscall_open()
+void syscall_open()
 {
     // use 3 regs, name str addr, attrib, and ptr to user space struct to store the file info
     uint32_t name_addr;
@@ -73,13 +70,18 @@ dirent* syscall_open()
         "mov %%edi, %0;"
         "mov %%esi, %1;"
         "mov %%edx, %2;"
-        : "=r"(name_addr), "=r"(attrib), "=r"(dirent_addr)
+        : "=a"(name_addr), "=b"(attrib), "=c"(dirent_addr)
     );
+
+    if (str_cmp("root", (char*)name_addr) == 0)
+    {
+        *((dirent*)dirent_addr) = sys_root_dir;
+        return;
+    }
+
     
-    dirent *f = fs_find_in(&(cur_proc->wdir), (char*)name_addr, attrib);
-    if (!f)
-        return 0;
-    else
+    dirent *f = fs_find_in(&(cur_proc->wdir), (char*)name_addr, (uint8_t)attrib);
+    if (f)
         *((dirent*)dirent_addr) = *f;
 
     kfree(f);
@@ -124,6 +126,77 @@ void syscall_sbrk()
     __asm__ volatile ( "mov %0, %%eax;" :: "r"(prior_break) );
 }
 
+void syscall_read_kbd_buf()
+{
+    // return to eax
+    __asm__ volatile ( "mov %0, %%eax;" :: "r"(proc_buf_read(cur_proc)) );
+}
+
+void syscall_move_cursor()
+{
+    int option;
+    __asm__ volatile ( "mov %%edi, %0;" : "=r"(option) );
+
+    switch (option)
+    {
+        case 0:
+            if (get_cursor_offset() != 0)
+            {
+                set_cursor(get_cursor_offset() - 2);
+                putchar(' ');
+                set_cursor(get_cursor_offset() - 2);
+            }
+            break;
+
+        case 1:
+            if (get_cursor_offset() > 79 * 2)
+                set_cursor(get_cursor_offset() - 80 * 2);
+            break;
+
+        case 2:
+            set_cursor(handle_scrolling(get_cursor_offset() + 80 * 2));
+            break;
+        
+        case 3:
+            if (get_cursor_offset() > 0)
+                set_cursor(get_cursor_offset() - 2);
+            break;
+            
+        case 4:
+            set_cursor(handle_scrolling(get_cursor_offset() + 2));
+            break;
+
+        default:
+            break;
+    }
+}
+
+void syscall_get_cur_dir()
+{
+    int write_addr;
+    __asm__ volatile ( "mov %%edi, %0;" : "=r"(write_addr) );
+    mem_copy(cur_proc->wdir.name, (char*)write_addr, sizeof(cur_proc->wdir));
+}
+
+void syscall_readdir()
+{
+    uint32_t dir_to_read;
+    uint32_t index;
+    uint32_t entry_to_wirte;
+    __asm__ volatile 
+    (
+        "mov %%edi, %0;"
+        "mov %%esi, %1;"
+        "mov %%edx, %2;"
+        : "=a"(dir_to_read), "=b"(index), "=c"(entry_to_wirte)
+    );
+
+    buf *b = bread(((dirent*)dir_to_read)->blockno);
+    *((dirent*)entry_to_wirte) = ((dirent*)b->data)[index];
+    brelease(b);
+}
+
+
 void syscall_init()
 {
     register_handler(128, syscall_handler);
@@ -132,4 +205,8 @@ void syscall_init()
     register_syscall(1, syscall_printc);
     register_syscall(2, syscall_open);
     register_syscall(3, syscall_sbrk);
+    register_syscall(4, syscall_read_kbd_buf);
+    register_syscall(5, syscall_move_cursor);
+    register_syscall(6, syscall_get_cur_dir);
+    register_syscall(7, syscall_readdir);
 }
