@@ -28,16 +28,20 @@ buf* bget(uint32_t blockno)
     buf *b = iocache->bufs;
 
     // Is the block already cached?
-    for (b = iocache->head->prev; b != iocache->head; b = b->prev)
+    for (b = iocache->head; b != iocache->head->next; b = b->prev)
         // Cached: set head to 'b', and return head
         if (b->blockno == blockno) 
         {
             b->refct++;
             return b;
         }
-
+    if (b->blockno == blockno)
+    {
+            b->refct++;
+            return b;
+    }
     // Not cached? Recycle the least recently used buffer not in use to buffer the block requested
-    for (b = iocache->head->prev; b != iocache->head; b = b->prev)
+    for (b = iocache->head->next; b != iocache->head; b = b->prev)
         if (!b->refct) // Not in use
         {
             b->blockno = blockno;
@@ -45,7 +49,13 @@ buf* bget(uint32_t blockno)
             b->valid = 0;
             return b;
         }
-
+    if (!b->refct) // Not in use
+    {
+        b->blockno = blockno;
+        b->refct = 1;
+        b->valid = 0;
+        return b;
+    }
     // Out of buffers -> panic
     return 0;
 }

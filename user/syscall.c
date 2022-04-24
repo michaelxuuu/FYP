@@ -73,16 +73,17 @@ void syscall_open()
         : "=a"(name_addr), "=b"(attrib), "=c"(dirent_addr)
     );
 
-    if (str_cmp("root", (char*)name_addr) == 0)
+    if (str_cmp("/", (char*)name_addr) == 0)
     {
         *((dirent*)dirent_addr) = sys_root_dir;
         return;
     }
-
     
     dirent *f = fs_find_in(&(cur_proc->wdir), (char*)name_addr, (uint8_t)attrib);
     if (f)
         *((dirent*)dirent_addr) = *f;
+    else
+        ((dirent*)dirent_addr)->blockno = 0;
 
     kfree(f);
 }
@@ -132,7 +133,7 @@ void syscall_read_kbd_buf()
     __asm__ volatile ( "mov %0, %%eax;" :: "r"(proc_buf_read(cur_proc)) );
 }
 
-void syscall_move_cursor()
+void syscall_cursor_action()
 {
     int option;
     __asm__ volatile ( "mov %%edi, %0;" : "=r"(option) );
@@ -196,6 +197,12 @@ void syscall_readdir()
     brelease(b);
 }
 
+void syscall_make_dir()
+{
+    uint32_t name;
+    __asm__ volatile ( "mov %%edi, %0;" : "=r"(name));
+    fs_add_dir_at(&cur_proc->wdir, (char *)name);
+}
 
 void syscall_init()
 {
@@ -206,7 +213,9 @@ void syscall_init()
     register_syscall(2, syscall_open);
     register_syscall(3, syscall_sbrk);
     register_syscall(4, syscall_read_kbd_buf);
-    register_syscall(5, syscall_move_cursor);
+    register_syscall(5, syscall_cursor_action);
     register_syscall(6, syscall_get_cur_dir);
     register_syscall(7, syscall_readdir);
+    register_syscall(8, clear_screen);
+    register_syscall(9, syscall_make_dir);
 }

@@ -92,7 +92,7 @@ void fs_init()
             bwrite(b);
 
             // System's root diretcory
-            dirent_set_name(rootdir + 1, "root");
+            dirent_set_name(rootdir + 1, "/");
             dirent_set_attrib(rootdir + 1, DIRENT_ATTRIB_USED);
             uint32_t freeblock = get_free_blocks(1);
             fat_set_next(freeblock + 1, 0);
@@ -103,26 +103,23 @@ void fs_init()
             brelease(b);
 
             // Clear the buffer and add '.' and '..' to the newly created directory
-            b = bget(freeblock);
+            b = bread(freeblock);
             dirent *p = (dirent *)b->data;
             mem_set((char*)p, 0, 4096);
 
-            dirent_set_name(p, ".");
+            dirent_set_name(p, "/");
             dirent_set_attrib(p, DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR);
             dirent_set_blockno(p, freeblock);
             dirent_set_size(p, 4);
 
             p++;
-            dirent_set_name(p, "..");
+            dirent_set_name(p, "/");
             dirent_set_attrib(p, DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR);
             dirent_set_blockno(p, freeblock);
             dirent_set_size(p, 4);
 
-            bwrite(b);
-            brelease(b);
-
             // Install the system root diretcory
-            dirent_set_name(&sys_root_dir, "root");
+            dirent_set_name(&sys_root_dir, "/");
             dirent_set_attrib(&sys_root_dir, DIRENT_ATTRIB_USED);
             dirent_set_blockno(&sys_root_dir, freeblock);
             dirent_set_size(&sys_root_dir, 4);
@@ -184,7 +181,7 @@ uint32_t get_free_blocks(uint32_t ct)
     for (int i = 0; i < ct; i++)
         next = fat_get_next(next);
 
-    set_first_free_block(fat_get_next(next));
+    set_first_free_block(next);
 
     return prior;
 }
@@ -279,13 +276,13 @@ void fs_add_dir_at(dirent* d, char *name)
         p = (dirent *)b->data;
         mem_set((char*)p, 0, 4096);
 
-        dirent_set_name(p, ".");
+        dirent_set_name(p, name);
         dirent_set_attrib(p, DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR);
         dirent_set_blockno(p, free_blockno);
         dirent_set_size(p, 4);
 
         p++;
-        dirent_set_name(p, "..");
+        dirent_set_name(p, d->name);
         dirent_set_attrib(p, d->attrib);
         dirent_set_blockno(p, d->blockno);
         dirent_set_size(p, d->size);
@@ -293,7 +290,6 @@ void fs_add_dir_at(dirent* d, char *name)
         bwrite(b);
         brelease(b);
     }
-    brelease(b);
 }
 
 // Add an empty file to the specified directory (file fixed to 4K in size)

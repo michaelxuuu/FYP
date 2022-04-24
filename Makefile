@@ -1,7 +1,7 @@
 SRC = $(wildcard kernel/*.c drivers/*.c cpu/*.c mem/*.c Lib/*.c fs/*.c user/*.c)
 OBJ = $(SRC:.c=.o cpu/hdlr_stub.o)
 
-FIRST_PROGRAM_BLOCK = 263
+FIRST_PROGRAM_BLOCK = 262
 
 all: run clean
 

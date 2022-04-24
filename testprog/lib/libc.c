@@ -70,7 +70,13 @@ int read_kbd_buf()
 // edi = 2 down
 // edi = 3 left
 // edi = 4 right
-void move_cursor(int option)
+#define CURSOR_ACTION_B 0
+#define CURSOR_ACTION_U 1
+#define CURSOR_ACTION_D 2
+#define CURSOR_ACTION_L 3
+#define CURSOR_ACTION_R 4
+
+void cursor_action(int option)
 {
     __asm__ volatile 
     (
@@ -79,6 +85,36 @@ void move_cursor(int option)
         "int $0x80;"
         :: "b"(option)
     );
+}
+
+void cursor_left(int i)
+{
+    for (; i>0 ; i--)
+        cursor_action(CURSOR_ACTION_L);
+}
+
+void cursor_right(int i)
+{
+    for (; i>0 ; i--)
+        cursor_action(CURSOR_ACTION_R);
+}
+
+void cursor_up(int i)
+{
+    for (; i>0 ; i--)
+        cursor_action(CURSOR_ACTION_U);
+}
+
+void cursor_down(int i)
+{
+    for (; i>0 ; i--)
+        cursor_action(CURSOR_ACTION_D);
+}
+
+void cursor_backspace(int i)
+{
+    for (; i>0 ; i--)
+        cursor_action(CURSOR_ACTION_B);
 }
 
 // get current directory's path/ name
@@ -107,6 +143,26 @@ void readdir(dirent *dir_to_read, dirent *dir_to_write, int index)
         "mov $0x7, %%eax;"
         "int $0x80;"
         :: "r"((int)dir_to_read), "r"(index), "r"((int)dir_to_write)
+    );
+}
+
+void clr_screen()
+{
+    __asm__ volatile 
+    (
+        "mov $0x8, %eax;"
+        "int $0x80;"
+    );
+}
+
+void make_dir(char *name)  // create a new directory under the current working directory of the proccess which the kernel keeps a record of
+{
+    __asm__ volatile
+    (
+        "mov %0, %%edi;"
+        "mov $0x9, %%eax;"
+        "int $0x80;"
+        :: "r"((int)name)
     );
 }
 

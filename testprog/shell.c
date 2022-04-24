@@ -2,56 +2,129 @@
 #include"lib/stdlib.h"
 #include"lib/string.h"
 #include"lib/ctype.h"
-
 #include"shell.h"
-
-struct
-{
-    char s[128];
-    int i;
-}cmd;
 
 char wdir[23];
 
-int main()
-{
+int main() {
+    cmd_init();
+    shebang();
+    for(;;)
+        key_stroke_action(read_kbd_buf());
+}
 
-    get_cur_dir(wdir);
+void cmd_init()
+{
+    cmdbuf.tail = 0;
+    cmdbuf.cursor = 0;
+}
+
+void key_char(char c)
+{
+    if (cmdbuf.cursor == 126 | cmdbuf.tail == 126) // buffer full (1 char reserved for NULL terminator)
+    {
+        putchar(c);
+        return;
+    }
+
+    if (cmdbuf.cursor == cmdbuf.tail) // append
+    {
+        putchar(c);
+        cmdbuf.s[cmdbuf.cursor] = c;
+    }
+    else {  // insert with shifting
+
+        // right shift the part of the cmdbuf starting from the cursor position by 1
+        int d = cmdbuf.tail - cmdbuf.cursor;
+        for (int i = cmdbuf.tail; i > cmdbuf.cursor; i--)
+            cmdbuf.s[i] = cmdbuf.s[i-1];
+        // insert the character at the vacancy made by the shift
+        cmdbuf.s[cmdbuf.cursor] = c;
+
+/* display on the screen */
+        // erase the part of the cmdbuf on the screen starting from the cursor position
+        cursor_right(d);
+        cursor_backspace(d);
+        // print the part of the cmdbuf deleted using the updated cmdbuf buffer
+        for (int i = cmdbuf.cursor; i < cmdbuf.tail + 1; i++)
+            putchar(cmdbuf.s[i]);
+        // 'putchar' has made cursor be at the end, so we reset it so it can be consistent with cmdbuf.position
+        cursor_left(d);
+    }
+    cmdbuf.cursor++;
+    cmdbuf.tail++;
+}
+
+void key_left()
+{
+    if (cmdbuf.cursor <= 0)
+        return;
+    cursor_left(1);
+    cmdbuf.cursor--;
+}
+
+void key_right()
+{
+    if (cmdbuf.cursor >= cmdbuf.tail)
+        return;
+    cursor_right(1);
+    cmdbuf.cursor++;
+}
+
+void key_delete()
+{
+    if (!cmdbuf.cursor)
+        return;
+    
+    if(cmdbuf.cursor == cmdbuf.tail)
+        cursor_backspace(1);
+    else{
+        // left shift the part of the cmdbuf starting from the cursor position - 1 by 1
+        int d = cmdbuf.tail - cmdbuf.cursor;
+        for (int i = cmdbuf.cursor - 1; i < cmdbuf.tail; i++)
+            cmdbuf.s[i] = cmdbuf.s[i+1];
+
+/* display on the screen */
+        // erase the part of the cmdbuf starting from the cursor position - 1
+        cursor_right(d);
+        cursor_backspace(d+1);
+        // print the part of the cmdbuf deleted using the updated cmdbuf buffer
+        for (int i = cmdbuf.cursor - 1; i < cmdbuf.tail - 1; i++)
+            putchar(cmdbuf.s[i]);
+        // set the screen cursor to the position that matches cmdbuf.curosr
+        cursor_left(d);
+    }
+    cmdbuf.cursor--;
+    cmdbuf.tail--;
+}
+
+void key_ret()
+{
+    putchar('\n'); // newline
+    cmdbuf.s[cmdbuf.tail] = 0; // append terminating NULL to the tail
+    shell_execute(); // execute the cmdbuf in the cmdbuf buffer
+    cmd_init();
+    shebang();
+}
+
+void shebang() {
+    get_cur_dir(wdir); // update widr
     printf("%s$", wdir);
-
-    while (1)
-    {
-        int key = read_kbd_buf();
-        if (key != -1)
-            key_stroke_action(key);
-    }
 }
 
-void traverse_dir()
-{
-    dirent curdir;
-    fopen(wdir, DIRENT_ATTRIB_DIR | DIRENT_ATTRIB_USED, &curdir);
-    dirent ent;
-    int i = 0;
-    readdir(&curdir, &ent, i);
-    while (ent.attrib & DIRENT_ATTRIB_USED)
-    {
-        i++;
-        printf("%s\n", ent.name);
-        readdir(&curdir, &ent, i);
-    }
-}
+char *shell_cmds[20];
+void *shell_funs[20];
 
 void shell_execute()
 {
     int args[10];
     int argct = 0;
 
-    for (int i = 0; cmd.s[i]; i++)
+    for (int i = 0; cmdbuf.s[i]; i++)
     {
-        if (cmd.s[i] == ' ')
-            cmd.s[i] = 0;
-        else if ((i == 0) | cmd.s[i-1] == 0)
+        if (cmdbuf.s[i] == ' ')
+            cmdbuf.s[i] = 0;
+        else if ((i == 0) | cmdbuf.s[i-1] == 0)
         {
             args[argct] = i;
             argct++;
@@ -59,29 +132,32 @@ void shell_execute()
     }
     argct--;
 
-    if(str_cmp("ls", cmd.s + args[0]) == 0)
-    {
-        traverse_dir();
+    if(str_cmp("ls", cmdbuf.s + args[0]) == 0) 
+    {   
+        if (!argct)
+            ls(".");
+        else 
+            ls(cmdbuf.s + args[1]);
     }
-    else if (str_cmp("cd", cmd.s + args[0]) == 0)
+    else if (str_cmp("cd", cmdbuf.s + args[0]) == 0)
     {
         dirent dir;
         dir.blockno = 0;
-        fopen(cmd.s + args[1], DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR, &dir);
+        fopen(cmdbuf.s + args[1], DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR, &dir);
         if (!dir.blockno)
             printf("Dir not found!\n");
         else
-            mem_copy(cmd.s + args[1], wdir, str_len(cmd.s + args[1]) + 1);
+            mem_copy(cmdbuf.s + args[1], wdir, str_len(cmdbuf.s + args[1]) + 1);
     }
-    else if (str_cmp("mkdir", cmd.s + args[0]) == 0)
+    else if (str_cmp("mkdir", cmdbuf.s + args[0]) == 0)
     {
-        
+        if (!argct)
+            printf("Dir name missing!\n");
+        else 
+            make_dir(cmdbuf.s + args[1]);
     }
-    
-
-    printf("\n%s$", wdir);
-        
-    cmd.i = 0;
+    else if (str_cmp("clear", cmdbuf.s + args[0]) == 0) 
+        clr_screen();
 }
 
 // Actiuon required only for keydown
@@ -92,69 +168,106 @@ void key_stroke_action(int key)
     {
         case KBD_KEY_TAB:
             printf("    ");
-            cmd.s[cmd.i++] = ' '; // tab becomes a single space char
+            key_char(' '); // tab becomes a single space char
             break;
         case KBD_KEY_BACKSPACE:
-            cmd.i--;
-            move_cursor(0);
+            key_delete();
             break;
         case KBD_KEY_RET:
-            putchar('\n');
-            cmd.s[cmd.i] = 0;
-            shell_execute();
+            key_ret();
             break;
         case KBD_KEY_UP:
-            move_cursor(1);
+            //cursor_action(1);
             break;
         case KBD_KEY_DOWN:
-            move_cursor(2);
+            //cursor_action(2);
             break;
         case KBD_KEY_LEFT:
-            move_cursor(3);
+            key_left();
             break;
         case KBD_KEY_RIGHT:
-            move_cursor(4);
+            key_right();
             break;
         case KBD_KEY_F1:
-            printf("F1\n");
+            //printf("F1\n");
             break;
         case KBD_KEY_F2:
-            printf("F2\n");
+            //printf("F2\n");
             break;
         case KBD_KEY_F3:
-            printf("F3\n");
+            //printf("F3\n");
             break;
         case KBD_KEY_F4:
-            printf("F4\n");
+            //printf("F4\n");
             break;
         case KBD_KEY_F5:
-            printf("F5\n");
+            //printf("F5\n");
             break;
         case KBD_KEY_F6:
-            printf("F6\n");
+            //printf("F6\n");
             break;
         case KBD_KEY_F7:
-            printf("F7\n");
+            //printf("F7\n");
             break;
-        
         case KBD_KEY_F8:
-            printf("F8\n");
+            //printf("F8\n");
             break;
         case KBD_KEY_F9:
-            printf("F9\n");
+            //printf("F9\n");
             break;
         case KBD_KEY_F10:
-            printf("F10\n");
+            //printf("F10\n");
             break;
         case KBD_KEY_F11:
-            printf("F11\n");
+            //printf("F11\n");
             break;
         case KBD_KEY_F12:
-            printf("F12\n");
+            //printf("F12\n");
+            break;
+        case -1: // no input key detected!
             break;
         default:
-            putchar(key);
-            cmd.s[cmd.i++] = key;
+            key_char(key); // tab becomes a single space char
             break;
         }
+}
+
+void ls(char *p)
+{
+    dirent d;
+    if (str_cmp(p, ".") == 0)
+        fopen(wdir, DIRENT_ATTRIB_DIR | DIRENT_ATTRIB_USED, &d);
+    else if (str_cmp(p, "..") == 0) {
+        fopen(wdir, DIRENT_ATTRIB_DIR | DIRENT_ATTRIB_USED, &d);
+        readdir(&d, &d, 1);
+    }
+    else 
+        fopen(p, DIRENT_ATTRIB_DIR | DIRENT_ATTRIB_USED, &d);
+
+    if (!d.blockno) {
+        printf("Dir not found!\n");
+        return;
+    }
+
+    for (int i = 0; i < 128; i++)
+    {
+        dirent e;
+        readdir(&d, &e, i);
+        if (e.attrib & DIRENT_ATTRIB_USED)
+        {
+            if (i == 0)
+                printf(".\n");
+            else if (i == 1)
+                printf("..\n");
+            else 
+                printf("%s\n", e.name);
+        }
+    }
+}
+
+void clear()
+{
+    for (int i = 0; i < 25; i++)
+        putchar('\n');
+    cursor_up(25);
 }

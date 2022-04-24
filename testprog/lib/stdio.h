@@ -30,10 +30,22 @@ void fopen(char *path, uint32_t attrib, dirent* p);
 
 int read_kbd_buf();
 
-void move_cursor(int option);
-
 void get_cur_dir(char *s);
 
 void readdir(dirent *dir_to_read, dirent *dir_to_write, int index);
+
+void cursor_left(int i);
+
+void cursor_right(int i);
+
+void cursor_up(int i);
+
+void cursor_down(int i);
+
+void cursor_backspace(int i);
+
+void clr_screen();
+
+void make_dir(char *name);
 
 #endif
