@@ -117,6 +117,8 @@ void shell_execute();
 
 void clear();
 
+void cd(char *p);
+
 // Actiuon required only for keydown
 void key_stroke_action(int key);
 

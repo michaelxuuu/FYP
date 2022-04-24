@@ -86,16 +86,15 @@ void fs_init()
         {
             // File for tracking the unallocated blocks
             dirent_set_name(rootdir, "free");
-            dirent_set_attrib(rootdir, DIRENT_ATTRIB_USED);
+            dirent_set_attrib(rootdir, DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR);
             dirent_set_blockno(rootdir, USABLE_BLOCKNO);
             dirent_set_size(rootdir, MAX_BLOCK - USABLE_BLOCKNO);
             bwrite(b);
 
             // System's root diretcory
             dirent_set_name(rootdir + 1, "/");
-            dirent_set_attrib(rootdir + 1, DIRENT_ATTRIB_USED);
+            dirent_set_attrib(rootdir + 1, DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR);
             uint32_t freeblock = get_free_blocks(1);
-            fat_set_next(freeblock + 1, 0);
             dirent_set_blockno(rootdir + 1, freeblock);
             dirent_set_size(rootdir + 1, 4);
 
@@ -133,7 +132,7 @@ void fs_init()
     ata_write_sectors((char*)magic, MAGIC_SECTNO, 1);
 
     // add a file
-    fs_add_file_at(&sys_root_dir, "shell.bin", DIRENT_ATTRIB_USED);
+    fs_add_file_at(&sys_root_dir, "shell.bin", DIRENT_ATTRIB_USED, 2);
 }
 
 /* -------------------------------Funstions that help manage the free space------------------------------- */
@@ -178,11 +177,15 @@ uint32_t get_free_blocks(uint32_t ct)
 
     /* Advance the starting block of the free space for 'ct' times */
     uint32_t next = prior;
+    uint32_t prev = next;
     for (int i = 0; i < ct; i++)
+    {
+        prev = next;
         next = fat_get_next(next);
+    }
 
     set_first_free_block(next);
-
+    fat_set_next(prev, 0);
     return prior;
 }
 
@@ -229,7 +232,8 @@ dirent* fs_find_in(dirent *d, char *path, uint8_t attrib)
 
     for (char *name = p; name < p + len; name += str_len(name))
     {
-        name += 1; // next name
+        if (name != p || *path == '/')
+            name += 1; // next name
 
         cur_dir = dir_lookup(cur_dir, name, attrib);
 
@@ -246,7 +250,7 @@ dirent* fs_find_in(dirent *d, char *path, uint8_t attrib)
 }
 
 // Add an entry of another directory to the specified directory
-void fs_add_dir_at(dirent* d, char *name)
+int fs_add_dir_at(dirent* d, char *name)
 {
     buf *b = bread(d->blockno);
     dirent *p = (dirent *)b->data;
@@ -262,10 +266,9 @@ void fs_add_dir_at(dirent* d, char *name)
     {
         p += i;
         dirent_set_name(p, name);
-        dirent_set_attrib(p, DIRENT_ATTRIB_USED);
+        dirent_set_attrib(p, DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR);
         uint32_t free_blockno = get_free_blocks(1);
         dirent_set_blockno(p, free_blockno);
-        fat_set_next(free_blockno, 0);
         dirent_set_size(p, 4); // Diretcories are all 4K in size containing 32 32-byte directory entries
 
         bwrite(b);
@@ -289,11 +292,17 @@ void fs_add_dir_at(dirent* d, char *name)
 
         bwrite(b);
         brelease(b);
+        return 1;
+    }
+    else
+    {
+        brelease(b);
+        return 0;
     }
 }
 
 // Add an empty file to the specified directory (file fixed to 4K in size)
-void fs_add_file_at(dirent* d, char *name, uint8_t attrib)
+int fs_add_file_at(dirent* d, char *name, uint8_t attrib, int size)
 {
     buf *b = bread(d->blockno);
     dirent *p = (dirent *)b->data;
@@ -310,13 +319,18 @@ void fs_add_file_at(dirent* d, char *name, uint8_t attrib)
         p += i;
         dirent_set_name(p, name);
         dirent_set_attrib(p, DIRENT_ATTRIB_USED);
-        uint32_t free_blockno = get_free_blocks(1);
+        uint32_t free_blockno = get_free_blocks(size);
         dirent_set_blockno(p, free_blockno);
-        fat_set_next(free_blockno, 0);
-        dirent_set_size(p, 4); // Diretcories are all 4K in size containing 32 32-byte directory entries
+        dirent_set_size(p, size);
+        bwrite(b);
+        brelease(b);
+        return 1;
     }
-    bwrite(b);
-    brelease(b);
+    else
+    {
+        return 0;
+        brelease(b);
+    }
 }
 
 dirent* fs_find(char *p, uint8_t attrib)

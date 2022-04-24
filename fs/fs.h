@@ -94,11 +94,11 @@ dirent* dir_lookup(dirent *d, char *name, uint8_t attrib);
 dirent* fs_find_in(dirent *d, char *path, uint8_t attrib);
 
 // Add an entry of another directory to the specified directory
-void fs_add_dir_at(dirent* d, char *name);
+int fs_add_dir_at(dirent* d, char *name);
 
 dirent* fs_find(char *p, uint8_t attrib);
 
-void fs_add_file_at(dirent* d, char *name, uint8_t attrib);
+int fs_add_file_at(dirent* d, char *name, uint8_t attrib, int size);
 
 void fs_read();
 

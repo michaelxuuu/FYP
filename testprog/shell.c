@@ -4,7 +4,7 @@
 #include"lib/ctype.h"
 #include"shell.h"
 
-char wdir[23];
+dirent wdir;
 
 int main() {
     cmd_init();
@@ -108,8 +108,8 @@ void key_ret()
 }
 
 void shebang() {
-    get_cur_dir(wdir); // update widr
-    printf("%s$", wdir);
+    get_cur_dir(&wdir); // update widr
+    printf("%s$", wdir.name);
 }
 
 char *shell_cmds[20];
@@ -141,13 +141,10 @@ void shell_execute()
     }
     else if (str_cmp("cd", cmdbuf.s + args[0]) == 0)
     {
-        dirent dir;
-        dir.blockno = 0;
-        fopen(cmdbuf.s + args[1], DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR, &dir);
-        if (!dir.blockno)
-            printf("Dir not found!\n");
-        else
-            mem_copy(cmdbuf.s + args[1], wdir, str_len(cmdbuf.s + args[1]) + 1);
+        if (!argct)
+            cd(".");
+        else 
+            cd(cmdbuf.s + args[1]);
     }
     else if (str_cmp("mkdir", cmdbuf.s + args[0]) == 0)
     {
@@ -157,7 +154,7 @@ void shell_execute()
             make_dir(cmdbuf.s + args[1]);
     }
     else if (str_cmp("clear", cmdbuf.s + args[0]) == 0) 
-        clr_screen();
+        clear_screen();
 }
 
 // Actiuon required only for keydown
@@ -236,13 +233,11 @@ void ls(char *p)
 {
     dirent d;
     if (str_cmp(p, ".") == 0)
-        fopen(wdir, DIRENT_ATTRIB_DIR | DIRENT_ATTRIB_USED, &d);
-    else if (str_cmp(p, "..") == 0) {
-        fopen(wdir, DIRENT_ATTRIB_DIR | DIRENT_ATTRIB_USED, &d);
-        readdir(&d, &d, 1);
-    }
+        d = wdir;
+    else if (str_cmp(p, "..") == 0)
+        readdir(&wdir, &d, 1); // read the second entry of the current dir
     else 
-        fopen(p, DIRENT_ATTRIB_DIR | DIRENT_ATTRIB_USED, &d);
+        fopen(p, DIRENT_ATTRIB_DIR, &d);
 
     if (!d.blockno) {
         printf("Dir not found!\n");
@@ -265,9 +260,22 @@ void ls(char *p)
     }
 }
 
-void clear()
+void cd(char *p)
 {
-    for (int i = 0; i < 25; i++)
-        putchar('\n');
-    cursor_up(25);
+    dirent d;
+    int ret;
+    if (str_cmp(p, ".") == 0)
+        return;
+    else if (str_cmp(p, "..") == 0) {
+        readdir(&wdir, &d, 1);
+        change_dir(d.name);
+        get_cur_dir(&wdir);
+    }
+    else
+    {
+        if (change_dir(p))
+            get_cur_dir(&wdir);
+        else
+            printf("Dir not found!\n");
+    }
 }

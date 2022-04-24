@@ -197,13 +197,14 @@ void proc_load_text(proc *p, char* path)
     dirent *e = fs_find(path, DIRENT_ATTRIB_USED);
     if (!e)
         return;
-    buf *b = bread(e->blockno);
-    mem_copy(b->data, (char*)0x0, e->size * 1024);
-    brelease(b);
-    b = bread(e->blockno + 1);
-    mem_copy(b->data, (char*)4096, e->size * 1024);
+    
+    for (uint32_t blockno = e->blockno, add_to_wirte = 0x0; blockno != 0; blockno = fat_get_next(blockno), add_to_wirte += 4096)
+    {
+        buf *b = bread(blockno);
+        mem_copy(b->data, (char*)add_to_wirte, 4096);
+        brelease(b);
+    }
     kfree(e);
-    brelease(b);
 }
 
 void proc_buf_init(proc *p)

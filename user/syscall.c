@@ -176,7 +176,7 @@ void syscall_get_cur_dir()
 {
     int write_addr;
     __asm__ volatile ( "mov %%edi, %0;" : "=r"(write_addr) );
-    mem_copy(cur_proc->wdir.name, (char*)write_addr, sizeof(cur_proc->wdir));
+    *((dirent*)write_addr) = cur_proc->wdir;
 }
 
 void syscall_readdir()
@@ -201,8 +201,34 @@ void syscall_make_dir()
 {
     uint32_t name;
     __asm__ volatile ( "mov %%edi, %0;" : "=r"(name));
-    fs_add_dir_at(&cur_proc->wdir, (char *)name);
+    if (fs_add_dir_at(&cur_proc->wdir, (char *)name))
+        __asm__ volatile ("mov $1, %eax;");
+    else
+        __asm__ volatile ("mov $0, %eax;");
 }
+
+void syscall_change_dir()
+{
+    uint32_t name;
+    __asm__ volatile ( "mov %%edi, %0;" : "=r"(name));
+
+    if (str_cmp("/", (char*)name) == 0)
+    {
+         cur_proc->wdir = sys_root_dir;
+        __asm__ volatile ("mov $1, %eax;");
+        return;
+    }
+
+    dirent *e = fs_find_in(&cur_proc->wdir, (char*)name, DIRENT_ATTRIB_DIR | DIRENT_ATTRIB_USED);
+    if (e)
+    {
+        cur_proc->wdir = *e;
+        __asm__ volatile ("mov $1, %eax;");
+        kfree(e);
+    }
+    else __asm__ volatile ("mov $0, %eax;");
+}
+
 
 void syscall_init()
 {
@@ -218,4 +244,5 @@ void syscall_init()
     register_syscall(7, syscall_readdir);
     register_syscall(8, clear_screen);
     register_syscall(9, syscall_make_dir);
+    register_syscall(10, syscall_change_dir);
 }

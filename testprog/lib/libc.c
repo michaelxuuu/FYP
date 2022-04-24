@@ -48,7 +48,7 @@ void putchar(char c)
 // C wrapper
 void fopen(char *path, uint32_t attrib, dirent* p)
 {
-    FOPEN(path, attrib, p);
+    FOPEN(path, attrib | DIRENT_ATTRIB_USED, p);
 }
 
 // read keyboard buffer 
@@ -117,16 +117,15 @@ void cursor_backspace(int i)
         cursor_action(CURSOR_ACTION_B);
 }
 
-// get current directory's path/ name
-// kernel writes the dir path/ name to s[22]
-void get_cur_dir(char *s)
+// kernel write the current dir to 'd'
+void get_cur_dir(dirent *d)
 {
     __asm__ volatile
     (
         "mov $0x6, %%eax;"
         "mov %0, %%edi;"
         "int $0x80;"
-        :: "b"((uint32_t)s)
+        :: "b"((uint32_t)d)
     );
 }
 
@@ -146,25 +145,26 @@ void readdir(dirent *dir_to_read, dirent *dir_to_write, int index)
     );
 }
 
-void clr_screen()
-{
-    __asm__ volatile 
-    (
+__asm__(".globl clear_screen;"
+        "clear_screen:;"
         "mov $0x8, %eax;"
         "int $0x80;"
-    );
-}
+        "ret;");
 
-void make_dir(char *name)  // create a new directory under the current working directory of the proccess which the kernel keeps a record of
-{
-    __asm__ volatile
-    (
-        "mov %0, %%edi;"
-        "mov $0x9, %%eax;"
-        "int $0x80;"
-        :: "r"((int)name)
-    );
-}
+__asm__(".globl make_dir;"
+        "make_dir:;"
+        "mov 4(%esp), %edi;"
+        "mov $0x9, %eax;"
+        "int $0x80;" // return value already in %eax
+        "ret;");
+
+
+__asm__(".globl change_dir;"
+        "change_dir:;"
+        "mov 4(%esp), %edi;"
+        "mov $0xA, %eax;"
+        "int $0x80;" // return value already in %eax
+        "ret;");
 
 // -----------------------------------  PRINTF  ----------------------------------------------
 enum format_types {
