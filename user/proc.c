@@ -37,6 +37,11 @@ void proc_set_context(proc *p)
     p->con.edx = 0;
 }
 
+void proc_copy_context(proc *p)
+{
+    p->con = cur_proc->con;
+}
+
 void proc_init()
 {
     __asm__ volatile ("cli;");
@@ -108,62 +113,73 @@ uint32_t get_pd_physical_addr(proc *p)
 // pt is inherited from the parent proc... which is the currently running proc
 void proc_alloc_pt(proc *child)
 {
-    uint32_t *src = cur_proc->pd;
-    if (nextid == 0);
-        src = cur_pd;
-    uint32_t *dest = child->pd;
+    // uint32_t *src = cur_proc->pd;
+    // if (nextid == 0);
+    //     src = cur_pd;
 
     // Create a page diretcory
-    dest = (uint32_t*)kmalloc(4096);
+    uint32_t pd_physical_addr = pm_mngr_alloc_block();
+    // map the directory to 0xfc00000
+    uint32_t *util_pt = (uint32_t*)0xC0100000;
+    page_install_frame_addr(util_pt, pd_physical_addr);
+    page_add_attrib(util_pt, PAGE_PRESENT | PAGE_WRITABLE);
+    // Pointer to the page dir
+    uint32_t *pd = (uint32_t*)0xFFC00000;
+    // uint32_t *dest = child->pd;
 
-    // copy the page directory
+    mem_set(pd, 0, 4096); // clear page table for use
+    //copy the page directory
     for (int i = 0; i < 1024; i++)
-        dest[i] = src[i];
+        pd[i] = cur_proc->pd[i];
 
     // Copy each page table if allocated
-    for (uint32_t *pde = dest; pde < dest + 1024; pde++)
-    {
-        if (!page_is_present(*pde))
-            continue;
+    // for (uint32_t *src_pde = cur_proc->pd, *dest_pde = pd; src_pde < cur_proc->pd + 1024; src_pde++, dest_pde++)
+    // {
+    //     if (!page_is_present(*src_pde)) // copy page table only if present
+    //         continue;
+    //     // copy attribute
+    //     *dest_pde = *src_pde & ~PAGE_FRAME_ADDR_MASK;
+    //     // Create a page table to paste
+    //     uint32_t dest_pt_physical_addr = pm_mngr_alloc_block();
+    //     // Link the page table to the page directory
+    //     page_install_frame_addr(dest_pde, dest_pt_physical_addr);
 
-        // Create a page table
-        uint32_t dest_pt_physical_addr = pm_mngr_alloc_block();
-        // Link the page table to the page directory
-        page_install_frame_addr(pde, dest_pt_physical_addr);
+    //     // Get src page table physical address
+    //     uint32_t src_pt_physical_addr = page_get_frame_addr(*src_pde);
 
-        // Get src page table physical address
-        uint32_t src_pt_physical_addr = page_get_frame_addr(*pde);
+    //     // Now we have the physical addresses of the dest and src page table but neither of them is mapped so we are currently unable to access them
+    //     // To access them, we need to first map them to the virtual address space with the help of the mapped utility page
+    //     // Pointer to the utility page
 
-        // Now we have the physical addresses of the dest and src page table but neither of them is mapped so we are currently unable to access them
-        // To access them, we need to first map them to the virtual address space with the help of the mapped utility page
-        // Pointer to the utility page
-        uint32_t *util_pt = (uint32_t*)0xC0100000;
-        // Map the src pt to 0xFFC00000 so that we can modify it through writing to the virtual address from 0xFFC00000 to 0xFFC00fff (4K)
-        page_install_frame_addr(util_pt, src_pt_physical_addr);
-        page_add_attrib(util_pt, PAGE_PRESENT | PAGE_WRITABLE);
-        // Map the src pt to 0xFFC01000 so that we can modify it through writing to the virtual address from 0xFFC01000 to 0xFFC01fff (4K)
-        page_install_frame_addr(util_pt + 1, dest_pt_physical_addr);
-        page_add_attrib(util_pt + 1, PAGE_PRESENT | PAGE_WRITABLE);
+    //     // Map the src pt to 0xFFC00000 so that we can modify it through writing to the virtual address from 0xFFC01000 to 0xFFC01fff (4K)
+    //     page_install_frame_addr(util_pt + 1, src_pt_physical_addr);
+    //     page_add_attrib(util_pt + 1, PAGE_PRESENT | PAGE_WRITABLE);
+    //     // Map the src pt to 0xFFC01000 so that we can modify it through writing to the virtual address from 0xFFC02000 to 0xFFC02fff (4K)
+    //     page_install_frame_addr(util_pt + 2, dest_pt_physical_addr);
+    //     page_add_attrib(util_pt + 2, PAGE_PRESENT | PAGE_WRITABLE);
 
-        // Pointer to the src page table
-        uint32_t *src_pt = (uint32_t*)0xFFC00000;
+    //     // Pointer to the src page table
+    //     uint32_t *src_pt = (uint32_t*)0xFFC01000;
 
-        // Pointer to the dest page table
-        uint32_t *dest_pt = (uint32_t*)0xFFC01000;
+    //     // Pointer to the dest page table
+    //     uint32_t *dest_pt = (uint32_t*)0xFFC02000;
 
-        // Copy!
-        // No previlige changing needed here since we are copying only the pages above 0xC0000000 which is the kernel space!
-        for (int i = 0; i < 1024; i++)
-            dest_pt[i] = src_pt[i];
+    //     // Copy!
+    //     // No previlige changing needed here since we are copying only the pages above 0xC0000000 which is the kernel space!
+    //     for (int i = 0; i < 1024; i++)
+    //         dest_pt[i] = src_pt[i];
 
-        // Clear the utility page (umapping the page tables)
-        *util_pt = 0;
-        *(util_pt + 1) = 0;
+    //     // Clear the utility page (umapping the page tables)
+    //     *(util_pt + 1) = 0;
+    //     *(util_pt + 2) = 0;
 
-        // flush tlb
-        __asm__ volatile ("invlpg (%0);" :: "r"(0xFFC00000));
-        __asm__ volatile ("invlpg (%0);" :: "r"(0xFFC01000));
-    }
+    //     // flush tlb
+    //     __asm__ volatile ("invlpg (%0);" :: "r"(0xFFC01000));
+    //     __asm__ volatile ("invlpg (%0);" :: "r"(0xFFC02000));
+    // }
+    *util_pt = 0;
+    __asm__ volatile ("invlpg (%0);" :: "r"(0xFFC00000));
+    child->pd = pd_physical_addr;
 }
 
 void proc_destory_pt(proc *p)
@@ -192,11 +208,11 @@ proc *cur_proc = 0; // pointer to the currently running process
 
 extern dirent sys_root_dir; // defined in fs.c
 
-void proc_load_text(proc *p, char* path)
+int proc_load_text(proc *p, char* path)
 {
     dirent *e = fs_find(path, DIRENT_ATTRIB_USED);
     if (!e)
-        return;
+        return 0;
     
     for (uint32_t blockno = e->blockno, add_to_wirte = 0x0; blockno != 0; blockno = fat_get_next(blockno), add_to_wirte += 4096)
     {
@@ -205,6 +221,7 @@ void proc_load_text(proc *p, char* path)
         brelease(b);
     }
     kfree(e);
+    return 1;
 }
 
 void proc_buf_init(proc *p)
@@ -257,7 +274,12 @@ proc* create_proc()
         child->wdir = sys_root_dir;
     }
     proc_assign_id(child);
-    proc_set_context(child);
+    if (pq->proc_ct)
+    {
+        proc_copy_context(child);
+    } else{
+        proc_set_context(child);
+    }
     proc_assign_paren(child);
     proc_brk_init(child);
     proc_buf_init(child);
@@ -301,6 +323,8 @@ void swtch(irq_reg_info *r)
 {
     if (!cur_proc)
         return;
+    if (cur_proc->id == 1)
+        return;
     // save current
     proc_save_context(cur_proc, r);
     // next proc
@@ -308,6 +332,13 @@ void swtch(irq_reg_info *r)
     // restore context
     proc_load_context(cur_proc, r);
     // load pdbr
-    uint32_t pd_physical_addr = get_pd_physical_addr(cur_proc);
-    vm_mngr_load_pd(pd_physical_addr);
+    if (cur_proc->id == 0)
+    {
+        uint32_t pd_physical_addr = get_pd_physical_addr(cur_proc);
+        vm_mngr_load_pd(5246976);
+    }
+    else
+    {
+        vm_mngr_load_pd(cur_proc->pd);
+    }
 }

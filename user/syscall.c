@@ -15,6 +15,13 @@ void syscall_handler(int_reg_info *r)
     if (r->eax >= SYSCALLNUM)
         return;
 
+    if (r->eax == 11)
+    {
+        __asm__ volatile ("mov %0, %%edi;" :: "r"((uint32_t)r));
+    }
+    else{
+
+
     // prep registers for the syscall
     // edi, esi, edx, ecx, ebx are for passing arguments
     __asm__ volatile
@@ -26,8 +33,9 @@ void syscall_handler(int_reg_info *r)
             mov %3, %%ecx; \
             mov %4, %%ebx; \
         "
-        :: "r" (r->edi), "r" (r->esi), "r" (r->edx), "r" (r->ecx), "r" (r->ebx)
+        :: "r" (r->edi), "r" (r->esi), "r" (r->edx), "r" (r->ecx), "a" ((uint32_t)r)
     );
+    }
 
     // do syscall
     __asm__ volatile ("call *%0" :: "r"((uint32_t)syscalls[r->eax]));
@@ -229,6 +237,29 @@ void syscall_change_dir()
     else __asm__ volatile ("mov $0, %eax;");
 }
 
+void syscall_fork()
+{
+    // update registers
+    uint32_t r;
+    __asm__ volatile ( "mov %%edi, %0;" : "=r"(r));
+    proc_save_context(cur_proc, (irq_reg_info*)r);
+    proc *p = create_proc();
+    p->con.eax = 0; // child
+    __asm__ volatile ("mov %0, %%eax" :: "r"(p->id)); // parent
+}
+
+void syscall_exec()
+{
+    uint32_t p;
+    uint32_t r;
+    __asm__ volatile ("mov %%edi, %0" : "=r"(p));
+    __asm__ volatile ( "mov %%ebx, %0;" : "=r"(r));
+    if(!proc_load_text(cur_proc, p))
+        kprintf("exec failed: %s not found\n", p);
+    // update parent context
+    ((irq_reg_info*)r)->eip = 0;
+    ((irq_reg_info*)r)->esp = 0xbffffff8;
+}
 
 void syscall_init()
 {
@@ -245,4 +276,6 @@ void syscall_init()
     register_syscall(8, clear_screen);
     register_syscall(9, syscall_make_dir);
     register_syscall(10, syscall_change_dir);
+    register_syscall(11, syscall_fork);
+    register_syscall(12, syscall_exec);
 }

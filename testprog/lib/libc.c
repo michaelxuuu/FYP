@@ -166,6 +166,19 @@ __asm__(".globl change_dir;"
         "int $0x80;" // return value already in %eax
         "ret;");
 
+__asm__(".globl fork;"
+        "fork:;"
+        "mov $0xB, %eax;"
+        "int $0x80;" // return value already in %eax
+        "ret;");
+
+__asm__(".globl exec;"
+        "exec:;"
+        "mov 4(%esp), %edi;" // executable addr
+        "mov $0xC, %eax;"
+        "int $0x80;" // return value already in %eax
+        "ret;");
+
 // -----------------------------------  PRINTF  ----------------------------------------------
 enum format_types {
     FMT_INT,

@@ -2,6 +2,7 @@
 #include"lib/stdlib.h"
 #include"lib/string.h"
 #include"lib/ctype.h"
+#include"lib/unistd.h"
 #include"shell.h"
 
 dirent wdir;
@@ -155,6 +156,13 @@ void shell_execute()
     }
     else if (str_cmp("clear", cmdbuf.s + args[0]) == 0) 
         clear_screen();
+    else if (cmdbuf.s[args[0]] == '.' && cmdbuf.s[args[0] + 1] == '/')
+    {
+        if (!fork()) // child
+            exec(cmdbuf.s + args[0] + 2);
+        for (;;);
+        // parent
+    }
 }
 
 // Actiuon required only for keydown

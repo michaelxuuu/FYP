@@ -94,4 +94,8 @@ int proc_buf_read(proc *p);
 
 void proc_buf_write(proc *p, int data);
 
+int proc_load_text(proc *p, char* path);
+
+void proc_save_context(proc *p, irq_reg_info *r);
+
 #endif

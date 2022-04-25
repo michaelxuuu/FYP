@@ -133,6 +133,7 @@ void fs_init()
 
     // add a file
     fs_add_file_at(&sys_root_dir, "shell.bin", DIRENT_ATTRIB_USED, 2);
+    fs_add_file_at(&sys_root_dir, "testprog.bin", DIRENT_ATTRIB_USED, 1);
 }
 
 /* -------------------------------Funstions that help manage the free space------------------------------- */

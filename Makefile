@@ -1,7 +1,13 @@
 SRC = $(wildcard kernel/*.c drivers/*.c cpu/*.c mem/*.c Lib/*.c fs/*.c user/*.c)
 OBJ = $(SRC:.c=.o cpu/hdlr_stub.o)
 
-FIRST_PROGRAM_BLOCK = 262
+FIRST_PROGRAM_NAME		= shell.bin
+FIRST_PROGRAM_BLOCK 	= 262
+FIRST_PROGRAM_BLOCK_CT 	= 2
+
+SECON_PROGRAM_NAME		= testprog.bin
+SECON_PROGRAM_BLOCK 	= 264
+SECON_PROGRAM_BLOCK_CT	= 1
 
 all: run clean
 
@@ -35,7 +41,8 @@ vhd: boot_sect.bin kernel.bin
 	dd bs=512 if=kernel.bin of=$@ seek=1 count=1024 conv=notrunc
 	make -C ./testprog/lib
 	make -C ./testprog
-	dd bs=4K if=./testprog/shell.bin of=vhd seek=$(FIRST_PROGRAM_BLOCK) count=2 conv=notrunc
+	dd bs=4K if=./testprog/$(FIRST_PROGRAM_NAME) of=vhd seek=$(FIRST_PROGRAM_BLOCK) count=$(FIRST_PROGRAM_BLOCK_CT) conv=notrunc
+	dd bs=4K if=./testprog/$(SECON_PROGRAM_NAME) of=vhd seek=$(SECON_PROGRAM_BLOCK) count=$(SECON_PROGRAM_BLOCK_CT) conv=notrunc
 
 kernel.elf: kernel_entry.o $(OBJ)
 	i386-elf-ld -Ttext 0xC0000000 -o $@  $^
