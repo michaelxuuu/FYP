@@ -106,15 +106,11 @@ vm_mngr_free_frame(uint32_t* ptr_to_pte) {
     page_del_attrib(ptr_to_pte, PAGE_PRESENT);
 }
 
-uint32_t* cur_pd;
-
-uint32_t* kernel_pd;
-
 void
 vm_mngr_lower_kernel_map(uint32_t va, uint32_t pa)
 {
-    // Pointer to the current page directory
-    uint32_t *pd = cur_pd;
+    // Pointer to the kernel page directory
+    uint32_t *pd = (uint32_t *)(KERNEL_PD_BASE + 0xC0000000);
 
     // Pointer to the page directory entry
     uint32_t *pde = pd + va_get_dir_index(va);
@@ -154,12 +150,11 @@ vm_mngr_init() {
     mem_set((char*)(pm_mngr_alloc_block() + 0xC0000000), 0, BLOCK_SIZE);
 
     // Create a page directory table
-    cur_pd = (uint32_t*)(pm_mngr_alloc_block() + 0xC0000000);
-    kernel_pd = cur_pd;
-    mem_set((char*)cur_pd, 0, BLOCK_SIZE);
+    uint32_t *pd = (uint32_t*)(pm_mngr_alloc_block() + 0xC0000000);
+    mem_set((char*)pd, 0, BLOCK_SIZE);
 
     // Load the PHYSICAL address of the page directory to the PDBR (HENCE minus 0xC0000000)
-    vm_mngr_load_pd((uint32_t)cur_pd - 0xC0000000);
+    vm_mngr_load_pd((uint32_t)pd - 0xC0000000);
 
     // Identity map the first 1M
     for (uint32_t pa = 0x0; pa < 0x100000; pa += BLOCK_SIZE)
@@ -176,11 +171,8 @@ vm_mngr_init() {
     // Map the utility page to 0xC0100000
     vm_mngr_lower_kernel_map(0xC0100000, 0x500000);
     // Link the utility page table to the last PDE in the directory table
-    page_install_frame_addr(cur_pd + 1023, 0x500000);
-    page_add_attrib(cur_pd + 1023, PAGE_PRESENT | PAGE_WRITABLE);
-
-    // Map the kernel page directory to 0xC0101000
-    vm_mngr_lower_kernel_map(0xC0101000, 0x501000);
+    page_install_frame_addr(pd + 1023, 0x500000);
+    page_add_attrib(pd + 1023, PAGE_PRESENT | PAGE_WRITABLE);
 
     // Enable paging
      __asm__ volatile
@@ -238,30 +230,78 @@ vm_mngr_init() {
     );
 
     // Update the current page diretory pointer (have it point to the mapped PD in 3G virtual)
-    cur_pd = (uint32_t*)0xC0101000;
-    kernel_pd = cur_pd;
 
 /* Discard the lower kernel */
 
+    uint32_t *pt = vm_mngr_map_frame(KERNEL_PD_BASE);
+
     // Delete the first page table
-    vm_mngr_free_frame(cur_pd);
+    vm_mngr_free_frame(pt);
 
     // Delete the page directory entry
-    page_del_attrib(cur_pd, PAGE_PRESENT);
+    page_del_attrib(pt, PAGE_PRESENT);
     
     // Flush the TLB
-    for (int i = 0, va = 0; i < 256; i++, va += 4096)
-        __asm__ volatile ("invlpg (%0);" :: "r"(va));
+    flush_tlb();
+
+    vm_mngr_unmap_frame(pt);
+}
+
+void flush_tlb()
+{
+    __asm__ volatile
+    (
+        "mov %cr3, %eax;"
+        "mov %eax, %cr3;"
+    );
+}
+
+void invalidate_tlb_ent(uint32_t va)
+{
+    __asm__ volatile ("invlpg (%0);" :: "r"(va));
+}
+
+// This is maily used to map page table frames so that we can manage them!
+// I did not initially map the any page tables, so to modify them, we have to map them to virtual address space first!
+uint32_t* vm_mngr_map_frame(uint32_t pa)
+{
+    uint32_t *utilpt = (uint32_t*)0xC0100000;
+
+    uint32_t *pte;
+    for (pte = utilpt; pte < utilpt + 1024; pte++) // find the smallest entry in the utility page table that's not in use 
+        if(!page_is_present(*pte))
+            break;
+    
+    if (pte == utilpt + 1024) // theoratically, this should never happen
+        return 0;
+
+    // map the given frame statring with the physical adddress 'pa' to a virtual page above 0xFFC00000 so that we can modify it though accessing virtual address there
+    page_add_attrib(pte, PAGE_PRESENT | PAGE_WRITABLE);
+    page_install_frame_addr(pte, pa);
+
+    return (uint32_t*)((pte - utilpt) * 4096 + 0xFFC00000);
+}
+
+// used in pair with vm_mngr_map_frame
+void vm_mngr_unmap_frame(uint32_t *va)
+{
+    uint32_t *utilpt = (uint32_t*)0xC0100000;
+
+    uint32_t *pte = (va - (uint32_t*)0xFFC00000)/4096 + utilpt;
+
+    *pte = 0;
+
+    invalidate_tlb_ent((uint32_t)va);
 }
 
 void
-vm_mngr_higher_kernel_map(uint32_t va, uint32_t pa, uint32_t attrib)
+vm_mngr_higher_kernel_map(uint32_t pd_pa, uint32_t va, uint32_t pa, uint32_t attrib)
 {
     // Pointer to the page directory
-    uint32_t *pd = cur_pd;
+    uint32_t *pd = vm_mngr_map_frame(pd_pa);
 
     // Pointer to the page directory entry (page table directiry is always mapped, NO page fault in accessing it!)
-    uint32_t *pde = cur_pd + va_get_dir_index(va);
+    uint32_t *pde = pd + va_get_dir_index(va);
 
     int new_page = 0;
     // If the page table is not present, create it!
@@ -278,19 +318,13 @@ vm_mngr_higher_kernel_map(uint32_t va, uint32_t pa, uint32_t attrib)
 
     // No page table is mapped! So, to add the mapping from va to pa to it, we need to first map it to the virtual address space with the help of the mapped utility page
 
-    // Pointer to the utility page
-    uint32_t *util_pt = (uint32_t*)0xC0100000;
-
     // Map the page table to 0xFFC00000 so that we can modify it through writing to the virtual address from 0xFFC00000 to 0xFFC01000 (4K)
-    page_install_frame_addr(util_pt, pt_physical_addr);
-    page_add_attrib(util_pt, PAGE_PRESENT | PAGE_WRITABLE);
-
     // Pointer to the page table
-    uint32_t *pt = (uint32_t*)0xFFC00000;
+    uint32_t *pt = vm_mngr_map_frame(pt_physical_addr);
+
     // Clear the newly created page table
     if (new_page)
-        for (int i = 0; i < 1024; i++)
-            pt[i] = 0;
+        mem_set((char*)pt, 0, 4096);
 
     // Pointer to the page table entry
     uint32_t *pte = pt + va_get_page_index(va);
@@ -299,21 +333,18 @@ vm_mngr_higher_kernel_map(uint32_t va, uint32_t pa, uint32_t attrib)
     page_install_frame_addr(pte, pa);
     page_add_attrib(pte, attrib);
 
-    // Clear the utility page (umapping the page table)
-    *util_pt = 0;
-
-    // flush tlb
-    __asm__ volatile ("invlpg (%0);" :: "r"(pt));
+    vm_mngr_unmap_frame(pd);
+    vm_mngr_unmap_frame(pt);
 }
 
 void
-vm_mngr_higher_kernel_unmap(uint32_t va)
+vm_mngr_higher_kernel_unmap(uint32_t pd_pa, uint32_t va)
 {
     // Pointer to the page directory
-    uint32_t *pd = cur_pd;
+    uint32_t *pd = vm_mngr_map_frame(pd_pa);
 
     // Pointer to the page directory entry (page table directiry is always mapped, NO page fault in accessing it!)
-    uint32_t *pde = cur_pd + va_get_dir_index(va);
+    uint32_t *pde = pd + va_get_dir_index(va);
 
     // If page table is not present, return
     if ( !page_is_present(*pde) )
@@ -325,14 +356,8 @@ vm_mngr_higher_kernel_unmap(uint32_t va)
 /* Deleting the mapping from the page table */
     // Map the page table to 0xFFC00000 so that we can modify it through writing to the virtual address from 0xFFC00000 to 0xFFC01000 (4K)
 
-    // Pointer to the utility page
-    uint32_t *util_pt = (uint32_t*)0xC0100000;
-    // Map
-    page_install_frame_addr(util_pt, pt_physical_addr);
-    page_add_attrib(util_pt, PAGE_PRESENT | PAGE_WRITABLE);
-
     // Pointer to the page table
-    uint32_t *pt = (uint32_t*)0xFFC00000;
+    uint32_t *pt = vm_mngr_map_frame(pt_physical_addr);
 
     // Pointer to the page table entry
     uint32_t *pte = pt + va_get_page_index(va);
@@ -349,9 +374,7 @@ vm_mngr_higher_kernel_unmap(uint32_t va)
         vm_mngr_free_frame(pde);
 
     // Clear the utility page (umapping the page table)
-    *util_pt = 0;
-
-    // flush tlb
-    __asm__ volatile ("invlpg (%0);" :: "r"(va));
-    __asm__ volatile ("invlpg (%0);" :: "r"(0xFFC00000));
+    vm_mngr_unmap_frame(pd);
+    vm_mngr_unmap_frame(pt);
+    invalidate_tlb_ent(va);
 }

@@ -54,7 +54,7 @@ void syscall_prints()
     char *s;
     __asm__ volatile ("mov %%edi, %0":"=r"(s));
     // call kprintf
-    kprintf(s);
+    print(s);
 }
 
 void syscall_printc()
@@ -96,14 +96,10 @@ void syscall_open()
     kfree(f);
 }
 
-extern uint32_t* cur_pd;
-
 #define USER_HEAP_BASE 4096
 
 void syscall_sbrk()
 {
-
-    cur_pd = cur_proc->pd;
     uint32_t ubreak_addr = cur_proc->brk_addr;
 
     int      inc;
@@ -120,14 +116,14 @@ void syscall_sbrk()
 
     for (int i = 0; i < block_ct; i++, ubreak_addr = inc > 0 ? ubreak_addr + 4096 : ubreak_addr - 4096)
         if (inc > 0)
-            vm_mngr_higher_kernel_map(ubreak_addr, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+            vm_mngr_higher_kernel_map(cur_proc->pd, ubreak_addr, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
         else if (ubreak_addr == USER_HEAP_BASE) // Stop freeing heap pages when hitting the heap base
         {
                 __asm__ volatile ( "mov %0, %%eax;" :: "r"(ubreak_addr) );
                 return;
         }
         else 
-            vm_mngr_higher_kernel_unmap(ubreak_addr - 1);
+            vm_mngr_higher_kernel_unmap(cur_proc->pd, ubreak_addr - 1);
 
     cur_proc->brk_addr = ubreak_addr;
 
@@ -254,7 +250,7 @@ void syscall_exec()
     uint32_t r;
     __asm__ volatile ("mov %%edi, %0" : "=r"(p));
     __asm__ volatile ( "mov %%ebx, %0;" : "=r"(r));
-    if(!proc_load_text(cur_proc, p))
+    if(!proc_load_text(cur_proc, (char*)p))
         kprintf("exec failed: %s not found\n", p);
     // update parent context
     ((irq_reg_info*)r)->eip = 0;

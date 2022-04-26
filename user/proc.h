@@ -42,7 +42,7 @@ typedef struct proc proc;
 typedef struct proc
 {
     uint32_t id;    // unique id
-    uint32_t *pd;   // page directory (table)
+    uint32_t pd;   // page directory (table)
     context con;    // context (register state)
     proc *parent;   // parent proc
     dirent wdir;
@@ -52,10 +52,6 @@ typedef struct proc
     proc *next;
     proc *prev;
 } proc;
-
-extern uint32_t *cur_pd;        // defined in vm_mngr.c
-
-extern uint32_t *kernel_pd;     // defined in vm_mngr.c
 
 typedef struct procqueue
 {

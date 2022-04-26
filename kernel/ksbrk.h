@@ -7,7 +7,7 @@
 
 #include"../mem/pm_mngr.h"
 
-#define KERNEL_HEAP_BASE 0xC0102000
+#define KERNEL_HEAP_BASE 0xC0101000
 
 /**
  * This function grows or shrinks the kernel heap
