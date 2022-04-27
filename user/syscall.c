@@ -9,101 +9,74 @@ void register_syscall(int syscallno, void *func)
     syscalls[syscallno] = func;
 }
 
+#define SYSCALL_FUNC void(*)(int, int, int, int, int, int)
+
 void syscall_handler(int_reg_info *r)
 {
     // requested syscall not exists
     if (r->eax >= SYSCALLNUM)
         return;
-
-    if (r->eax == 11)
-    {
-        __asm__ volatile ("mov %0, %%edi;" :: "r"((uint32_t)r));
-    }
-    else{
-
-
+    
     // prep registers for the syscall
-    // edi, esi, edx, ecx, ebx are for passing arguments
-    __asm__ volatile
-    (
-        "\
-            mov %0, %%edi; \
-            mov %1, %%esi; \
-            mov %2, %%edx; \
-            mov %3, %%ecx; \
-            mov %4, %%ebx; \
-        "
-        :: "r" (r->edi), "r" (r->esi), "r" (r->edx), "r" (r->ecx), "a" ((uint32_t)r)
-    );
-    }
+    // proc's edi, esi, edx, ecx, ebx pushed onto the stack
+    // r is also passed
+    ((SYSCALL_FUNC)syscalls[r->eax])(r->edi, r->esi, r->edx, r->ecx, r->ebx, (int)r);
 
-    // do syscall
-    __asm__ volatile ("call *%0" :: "r"((uint32_t)syscalls[r->eax]));
-    // do not use the below way of calling in which the args will be pushed onto the stack instead of passed via registers
-    // syscalls[r->eax];
-
-    // obtain return val from eax and overwrite the user eax pushed onto the kernel stack
-    // so that when we have switched back to the user space, eax contains the return value of the syscall
+    // obtain return val from eax and store it to the proc's eax pushed onto the kernel stack
+    // so that when we have switched back to executing the interrupted proc, eax contains the return value of the syscall
     __asm__ volatile ("mov %%eax, %0":"=r"(r->eax));
-
 }
 
-void syscall_prints()
+#define SYSCALL0(name) void syscall_##name(int edi, int esi, int edx, int ecx, int ebx, int r)
+#define SYSCALL1(name, p1) void syscall_##name(int p1, int esi, int edx, int ecx, int ebx, int r)
+#define SYSCALL2(name, p1, p2) void syscall_##name(int p1, int p2, int edx, int ecx, int ebx, int r)
+#define SYSCALL3(name, p1, p2, p3) void syscall_##name(int p1, int p2, int p3, int ecx, int ebx, int r)
+#define SYSCALL4(name, p1, p2, p3, p4) void syscall_##name(int p1, int p2, int p3, int p4, int ebx, int r)
+#define SYSCALL5(name, p1, p2, p3, p4, p5) void syscall_##name(int p1, int p2, int p3, int p4, int p5, int r)
+
+SYSCALL1(prints, str)
 {
     // use only 1 reg containing str's starting addr
-    char *s;
-    __asm__ volatile ("mov %%edi, %0":"=r"(s));
-    // call kprintf
-    print(s);
+    print((char*) str);
 }
 
-void syscall_printc()
+SYSCALL1(printc, c)
 {
     // use only 1 reg containing the character
-    uint32_t c;
-    __asm__ volatile ("mov %%edi, %0":"=r"(c));
-    // call kprintf
     putchar(c);
 }
 
-
-void syscall_open()
+SYSCALL3(open, name, attrib, dirent_to_write)
 {
     // use 3 regs, name str addr, attrib, and ptr to user space struct to store the file info
-    uint32_t name_addr;
-    uint32_t attrib;
-    uint32_t dirent_addr;
-    __asm__ volatile 
-    (
-        "mov %%edi, %0;"
-        "mov %%esi, %1;"
-        "mov %%edx, %2;"
-        : "=a"(name_addr), "=b"(attrib), "=c"(dirent_addr)
-    );
 
-    if (str_cmp("/", (char*)name_addr) == 0)
+    if (str_cmp("/", (char*)name) == 0)
     {
-        *((dirent*)dirent_addr) = sys_root_dir;
-        return;
+        *((dirent*)dirent_to_write) = sys_root_dir;
+        __asm__ volatile ("mov $1, %eax; ret;");
     }
     
-    dirent *f = fs_find_in(&(cur_proc->wdir), (char*)name_addr, (uint8_t)attrib);
-    if (f)
-        *((dirent*)dirent_addr) = *f;
-    else
-        ((dirent*)dirent_addr)->blockno = 0;
+    dirent *f = fs_find_in(&(cur_proc->wdir), (char*)name, (uint8_t)attrib);
 
-    kfree(f);
+    if (f) 
+    {
+        *((dirent*)dirent_to_write) = *f; // file not found!
+        kfree(f);
+        __asm__ volatile ("mov $0, %eax; ret;");
+    }
+    else 
+    {
+        ((dirent*)dirent_to_write)->blockno = 0;
+        kfree(f);
+        __asm__ volatile ("mov $1, %eax; ret;");
+    }
 }
 
 #define USER_HEAP_BASE 4096
 
-void syscall_sbrk()
+SYSCALL1(sbrk, inc)
 {
     uint32_t ubreak_addr = cur_proc->brk_addr;
-
-    int      inc;
-    __asm__ volatile ( "mov %%edi, %0;" : "=r"(inc) );
     
     uint32_t prior_break = ubreak_addr;
 
@@ -117,34 +90,31 @@ void syscall_sbrk()
     for (int i = 0; i < block_ct; i++, ubreak_addr = inc > 0 ? ubreak_addr + 4096 : ubreak_addr - 4096)
         if (inc > 0)
             vm_mngr_higher_kernel_map(cur_proc->pd, ubreak_addr, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
-        else if (ubreak_addr == USER_HEAP_BASE) // Stop freeing heap pages when hitting the heap base
-        {
-                __asm__ volatile ( "mov %0, %%eax;" :: "r"(ubreak_addr) );
-                return;
-        }
-        else 
-            vm_mngr_higher_kernel_unmap(cur_proc->pd, ubreak_addr - 1);
+        else if (ubreak_addr == USER_HEAP_BASE) __asm__ volatile ("mov $0, %eax; ret;"); // Stop freeing heap pages when hitting the heap base
+        else  vm_mngr_higher_kernel_unmap(cur_proc->pd, ubreak_addr - 1);
 
     cur_proc->brk_addr = ubreak_addr;
 
-    // return to eax
-    __asm__ volatile ( "mov %0, %%eax;" :: "r"(prior_break) );
+    __asm__ volatile ("mov %0, %%eax;" :: "r"(prior_break));
 }
 
-void syscall_read_kbd_buf()
+SYSCALL0(read_kbd_buf)
 {
     // return to eax
-    __asm__ volatile ( "mov %0, %%eax;" :: "r"(proc_buf_read(cur_proc)) );
+    __asm__ volatile ("mov %0, %%eax;" :: "r"(proc_buf_read(cur_proc)));
 }
 
-void syscall_cursor_action()
-{
-    int option;
-    __asm__ volatile ( "mov %%edi, %0;" : "=r"(option) );
+#define CURSOR_ACTION_B 0
+#define CURSOR_ACTION_U 1
+#define CURSOR_ACTION_D 2
+#define CURSOR_ACTION_L 3
+#define CURSOR_ACTION_R 4
 
-    switch (option)
+SYSCALL1(cursor_action, opt)
+{
+    switch (opt)
     {
-        case 0:
+        case CURSOR_ACTION_B:
             if (get_cursor_offset() != 0)
             {
                 set_cursor(get_cursor_offset() - 2);
@@ -153,21 +123,21 @@ void syscall_cursor_action()
             }
             break;
 
-        case 1:
+        case CURSOR_ACTION_U:
             if (get_cursor_offset() > 79 * 2)
                 set_cursor(get_cursor_offset() - 80 * 2);
             break;
 
-        case 2:
+        case CURSOR_ACTION_D:
             set_cursor(handle_scrolling(get_cursor_offset() + 80 * 2));
             break;
         
-        case 3:
+        case CURSOR_ACTION_L:
             if (get_cursor_offset() > 0)
                 set_cursor(get_cursor_offset() - 2);
             break;
             
-        case 4:
+        case CURSOR_ACTION_R:
             set_cursor(handle_scrolling(get_cursor_offset() + 2));
             break;
 
@@ -176,91 +146,62 @@ void syscall_cursor_action()
     }
 }
 
-void syscall_get_cur_dir()
+SYSCALL1(get_cur_dir, dirent_to_write)
 {
-    int write_addr;
-    __asm__ volatile ( "mov %%edi, %0;" : "=r"(write_addr) );
-    *((dirent*)write_addr) = cur_proc->wdir;
+    *((dirent*)dirent_to_write) = cur_proc->wdir;
 }
 
-void syscall_readdir()
+SYSCALL3(readdir, dir, index, dirent_to_wtite)// call open to get dirent first then call this routine to read it by index
 {
-    uint32_t dir_to_read;
-    uint32_t index;
-    uint32_t entry_to_wirte;
-    __asm__ volatile 
-    (
-        "mov %%edi, %0;"
-        "mov %%esi, %1;"
-        "mov %%edx, %2;"
-        : "=a"(dir_to_read), "=b"(index), "=c"(entry_to_wirte)
-    );
-
-    buf *b = bread(((dirent*)dir_to_read)->blockno);
-    *((dirent*)entry_to_wirte) = ((dirent*)b->data)[index];
+    buf *b = bread(((dirent*)dir)->blockno);
+    *((dirent*)dirent_to_wtite) = ((dirent*)b->data)[index];
     brelease(b);
 }
 
-void syscall_make_dir()
+SYSCALL1(make_dir, name)
 {
-    uint32_t name;
-    __asm__ volatile ( "mov %%edi, %0;" : "=r"(name));
-    if (fs_add_dir_at(&cur_proc->wdir, (char *)name))
-        __asm__ volatile ("mov $1, %eax;");
-    else
-        __asm__ volatile ("mov $0, %eax;");
+    if (fs_add_dir_at(&cur_proc->wdir, (char *)name)) __asm__ volatile ("mov $1, %eax; ret;");
+    else __asm__ volatile ("mov $0, %eax;");
 }
 
-void syscall_change_dir()
+SYSCALL1(change_dir, name)
 {
-    uint32_t name;
-    __asm__ volatile ( "mov %%edi, %0;" : "=r"(name));
-
     if (str_cmp("/", (char*)name) == 0)
     {
-         cur_proc->wdir = sys_root_dir;
-        __asm__ volatile ("mov $1, %eax;");
-        return;
+        cur_proc->wdir = sys_root_dir;
+        __asm__ volatile ("mov $1, %eax; ret;");
     }
 
     dirent *e = fs_find_in(&cur_proc->wdir, (char*)name, DIRENT_ATTRIB_DIR | DIRENT_ATTRIB_USED);
     if (e)
     {
         cur_proc->wdir = *e;
-        __asm__ volatile ("mov $1, %eax;");
         kfree(e);
+        __asm__ volatile ("mov $1, %eax; ret;");
     }
     else __asm__ volatile ("mov $0, %eax;");
 }
 
-void syscall_fork()
+SYSCALL0(fork)
 {
-    // update registers
-    uint32_t r;
-    __asm__ volatile ( "mov %%edi, %0;" : "=r"(r));
-    proc_save_context(cur_proc, (irq_reg_info*)r);
+    proc_save_context(cur_proc, (int_reg_info*)r);
     proc *p = create_proc();
     p->con.eax = 0; // child
     __asm__ volatile ("mov %0, %%eax" :: "r"(p->id)); // parent
 }
 
-void syscall_exec()
+SYSCALL1(exec, p)
 {
-    uint32_t p;
-    uint32_t r;
-    __asm__ volatile ("mov %%edi, %0" : "=r"(p));
-    __asm__ volatile ( "mov %%ebx, %0;" : "=r"(r));
     if(!proc_load_text(cur_proc, (char*)p))
         kprintf("exec failed: %s not found\n", p);
     // update parent context
-    ((irq_reg_info*)r)->eip = 0;
-    ((irq_reg_info*)r)->esp = 0xbffffff8;
+    ((int_reg_info*)r)->eip = 0;
+    ((int_reg_info*)r)->esp = 0xbffffff8;
 }
 
 void syscall_init()
 {
     register_handler(128, syscall_handler);
-
     register_syscall(0, syscall_prints);
     register_syscall(1, syscall_printc);
     register_syscall(2, syscall_open);
