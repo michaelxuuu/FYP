@@ -214,7 +214,15 @@ SYSCALL0(wait)
 {
     cur_proc->signals[SIG_WAIT] = 1;
     swtch((int_reg_info*)r);
-    __asm__ volatile ("mov %0, %%eax" :: "r"(((int_reg_info*)r)->eax));
+    __asm__ volatile ("mov %0, %%eax" :: "r"(((int_reg_info*)r)->eax)); // eax may be altered later prior to line 27
+}
+
+SYSCALL0(exit)
+{
+    cur_proc->parent->signals[SIG_WAIT] = 0; // ask its parent to stop waiting
+    proc_destory(cur_proc); // destory proc
+    swtch((int_reg_info*)r); // schedule the next proc to run
+    __asm__ volatile ("mov %0, %%eax" :: "r"(((int_reg_info*)r)->eax)); // eax may be altered later prior to line 27
 }
 
 void syscall_init()
@@ -234,4 +242,5 @@ void syscall_init()
     register_syscall(11, syscall_fork);
     register_syscall(12, syscall_exec);
     register_syscall(13, syscall_wait);
+    register_syscall(14, syscall_exit);
 }

@@ -99,4 +99,6 @@ int proc_load_text(proc *p, char* path);
 
 void proc_save_context(proc *p, irq_reg_info *r);
 
+void proc_destory(proc *p);
+
 #endif

@@ -363,7 +363,7 @@ vm_mngr_higher_kernel_unmap(uint32_t pd_pa, uint32_t va)
     uint32_t *pte = pt + va_get_page_index(va);
 
     // Delete the page table entry
-    page_del_attrib(pte, PAGE_PRESENT);
+    vm_mngr_free_frame(pde);
 
     // Scan the page table, if no pages present, remove the page table
     for (; (uint32_t)pt < 0xFFC01000; pt++)

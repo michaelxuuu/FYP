@@ -149,7 +149,26 @@ void proc_alloc_pt(proc *child)
 
 void proc_destory_pt(proc *p)
 {
-    
+    // free text and heap
+    for (int i = 0; i < 4; i++)
+        vm_mngr_higher_kernel_unmap(p->pd, i * 4096);
+    // free stack
+    vm_mngr_higher_kernel_unmap(p->pd, 0xC0000000 - 0x1000);
+    // free pd
+    pm_mngr_free_block(p->pd);
+}
+
+void proc_unlink(proc *p)
+{
+    p->prev->next = p->next;
+    p->next->prev = p->prev;
+    kfree(p);
+}
+
+void proc_destory(proc *p)
+{
+    proc_destory_pt(p);
+    proc_unlink(p);
 }
 
 void proc_assign_id(proc *p)

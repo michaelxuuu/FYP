@@ -7,4 +7,6 @@ extern int exec(char *p);
 
 extern void wait();
 
+extern void exit();
+
 #endif

@@ -185,6 +185,12 @@ __asm__(".globl wait;"
         "int $0x80;"
         "ret;");
 
+__asm__(".globl exit;"
+        "exit:;"
+        "mov $0xE, %eax;"
+        "int $0x80;"
+        "ret;");
+
 // -----------------------------------  PRINTF  ----------------------------------------------
 enum format_types {
     FMT_INT,

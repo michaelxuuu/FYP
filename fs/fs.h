@@ -33,10 +33,11 @@
 typedef struct dirent
 {
 
-    uint8_t name[23];
+    uint8_t name[19];
     uint8_t attrib;
     uint32_t blockno;
     uint32_t size;
+    uint32_t EOF;
 
 } __attribute__((packed)) dirent;
 

@@ -258,7 +258,7 @@ uint32_t vm_mngr_alloc_frame(uint32_t* ptr_to_pte);
 /**
  * Free the physical memory allocated for the page
  */
-void vm_mngr_free_frame(uint32_t* ptr_to_ptr);
+void vm_mngr_free_frame(uint32_t* ptr_to_pte);
 
 /**
  * Map the physical address to the virtual address on a 4K basis (1 block at a time)
