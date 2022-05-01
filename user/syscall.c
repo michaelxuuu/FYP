@@ -156,8 +156,14 @@ SYSCALL1(get_cur_dir, dirent_to_write)
 
 SYSCALL3(readdir, dir, index, dirent_to_wtite)// call open to get dirent first then call this routine to read it by index
 {
+    if (!index)
+    {
+        // report the current directory itself
+        *((dirent*)dirent_to_wtite) = cur_proc->wdir;
+        return;
+    }
     buf *b = bread(((dirent*)dir)->blockno);
-    *((dirent*)dirent_to_wtite) = ((dirent*)b->data)[index];
+    *((dirent*)dirent_to_wtite) = ((dirent*)b->data)[--index];
     brelease(b);
 }
 
@@ -207,7 +213,7 @@ SYSCALL1(exec, p)
 SYSCALL0(wait)
 {
     cur_proc->signals[SIG_WAIT] = 1;
-    swtch(r);
+    swtch((int_reg_info*)r);
     __asm__ volatile ("mov %0, %%eax" :: "r"(((int_reg_info*)r)->eax));
 }
 

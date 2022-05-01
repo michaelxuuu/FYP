@@ -101,17 +101,11 @@ void fs_init()
             bwrite(b);
             brelease(b);
 
-            // Clear the buffer and add '.' and '..' to the newly created directory
+            // Clear the buffer and '..' to the newly created directory
             b = bread(freeblock);
             dirent *p = (dirent *)b->data;
             mem_set((char*)p, 0, 4096);
 
-            dirent_set_name(p, "/");
-            dirent_set_attrib(p, DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR);
-            dirent_set_blockno(p, freeblock);
-            dirent_set_size(p, 4);
-
-            p++;
             dirent_set_name(p, "/");
             dirent_set_attrib(p, DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR);
             dirent_set_blockno(p, freeblock);
@@ -275,17 +269,11 @@ int fs_add_dir_at(dirent* d, char *name)
         bwrite(b);
         brelease(b);
 
-        // Clear the buffer and add '.' and '..' to the newly created directory
+        // Clear the buffer and '..' to the newly created directory
         b = bget(free_blockno);
         p = (dirent *)b->data;
         mem_set((char*)p, 0, 4096);
 
-        dirent_set_name(p, name);
-        dirent_set_attrib(p, DIRENT_ATTRIB_USED | DIRENT_ATTRIB_DIR);
-        dirent_set_blockno(p, free_blockno);
-        dirent_set_size(p, 4);
-
-        p++;
         dirent_set_name(p, d->name);
         dirent_set_attrib(p, d->attrib);
         dirent_set_blockno(p, d->blockno);
