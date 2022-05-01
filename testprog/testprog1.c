@@ -1,8 +1,8 @@
 #include"lib/stdio.h"
 #include"lib/unistd.h"
 
-int main()
+int main(int argc, char** argv)
 {
-    printf("I am the Test Program!\n");
+    printf("%s!\n", argv[0]);
     exit();
 }

@@ -191,6 +191,13 @@ __asm__(".globl exit;"
         "int $0x80;"
         "ret;");
 
+__asm__(".globl execv;"
+        "execv:;"
+        "mov 4(%esp), %edi;" // executable addr
+        "mov 8(%esp), %esi;" // args
+        "mov $0xF, %eax;"
+        "int $0x80;" // return value already in %eax
+        "ret;");
 // -----------------------------------  PRINTF  ----------------------------------------------
 enum format_types {
     FMT_INT,

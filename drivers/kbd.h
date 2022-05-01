@@ -15,6 +15,8 @@
 
 #include"../user/proc.h"
 
+#include"../user/syscall.h"
+
 
 // ps2 controller ports
 #define PS2_CONTROLLER_PORT_DATA   0x60 // also used to interact with PS/2 devices - keyboard (encoder)/ mouse

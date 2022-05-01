@@ -113,9 +113,6 @@ void shebang() {
     printf("%s$", wdir.name);
 }
 
-char *shell_cmds[20];
-void *shell_funs[20];
-
 void shell_execute()
 {
     int args[10];
@@ -159,7 +156,17 @@ void shell_execute()
     else if (cmdbuf.s[args[0]] == '.' && cmdbuf.s[args[0] + 1] == '/')
     {
         if (!fork()) // child
-            exec(cmdbuf.s + args[0] + 2);
+        {
+            if (!argct) // no args
+                exec(cmdbuf.s + args[0] + 2);
+            else
+            {
+                char* argps[10];
+                for (int i = 1; i < argct + 1; i++)
+                    argps[i-1] = cmdbuf.s + args[i];
+                execv(cmdbuf.s + args[0] + 2, argps);
+            }
+        }
         wait();
         // parent
     }

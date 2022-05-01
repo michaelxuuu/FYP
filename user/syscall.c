@@ -9,8 +9,6 @@ void register_syscall(int syscallno, void *func)
     syscalls[syscallno] = func;
 }
 
-#define SYSCALL_FUNC void(*)(int, int, int, int, int, int)
-
 void syscall_handler(int_reg_info *r)
 {
     // requested syscall not exists
@@ -26,13 +24,6 @@ void syscall_handler(int_reg_info *r)
     // so that when we have switched back to executing the interrupted proc, eax contains the return value of the syscall
     __asm__ volatile ("mov %%eax, %0":"=r"(r->eax));
 }
-
-#define SYSCALL0(name) void syscall_##name(int edi, int esi, int edx, int ecx, int ebx, int r)
-#define SYSCALL1(name, p1) void syscall_##name(int p1, int esi, int edx, int ecx, int ebx, int r)
-#define SYSCALL2(name, p1, p2) void syscall_##name(int p1, int p2, int edx, int ecx, int ebx, int r)
-#define SYSCALL3(name, p1, p2, p3) void syscall_##name(int p1, int p2, int p3, int ecx, int ebx, int r)
-#define SYSCALL4(name, p1, p2, p3, p4) void syscall_##name(int p1, int p2, int p3, int p4, int ebx, int r)
-#define SYSCALL5(name, p1, p2, p3, p4, p5) void syscall_##name(int p1, int p2, int p3, int p4, int p5, int r)
 
 SYSCALL1(prints, str)
 {
@@ -207,7 +198,7 @@ SYSCALL1(exec, p)
         kprintf("exec failed: %s not found\n", p);
     // update parent context
     ((int_reg_info*)r)->eip = 0;
-    ((int_reg_info*)r)->esp = 0xbffffff8;
+    ((int_reg_info*)r)->esp = 0xbffffff4;
 }
 
 SYSCALL0(wait)
@@ -232,6 +223,36 @@ SYSCALL0(exit)
     __asm__ volatile ("mov %0, %%eax" :: "r"(((int_reg_info*)r)->eax)); // eax may be altered later prior to line 27
 }
 
+SYSCALL2(execv, p, argl)
+{
+    char *temp[10];
+    for (int i = 0; i < 10; i++) temp[i] = 0;
+    char **al = (char**)argl;
+    for (int i = 0; al[i]; i++) 
+    {
+        temp[i] = kmalloc(str_len(al[i]) + 1);
+        mem_copy(al[i], temp[i], str_len(al[i]) + 1);
+    }
+    if(!proc_load_text(cur_proc, (char*)p))
+        kprintf("exec failed: %s not found\n", p);
+        
+    // get and args
+    char **argv = (char**)0x3000;
+    uint32_t *argp = (uint32_t*)0x3000 + 10;
+    int i = 0;
+    for (i = 0; temp[i]; i++, argp += (str_len(temp[i]) + 1))
+    {
+        mem_copy(temp[i], (char*)argp, str_len(temp[i]) + 1);
+        argv[i] = (char*)argp;
+    }
+    
+    *((uint32_t*)(0xC0000000 - 4)) = 0x3000; // argv
+    *((uint32_t*)(0xC0000000 - 8)) = i; // argc
+    // update parent context
+    ((int_reg_info*)r)->eip = 0;
+    ((int_reg_info*)r)->useresp = 0xbffffff4;
+}
+
 void syscall_init()
 {
     register_handler(128, syscall_handler);
@@ -250,4 +271,5 @@ void syscall_init()
     register_syscall(12, syscall_exec);
     register_syscall(13, syscall_wait);
     register_syscall(14, syscall_exit);
+    register_syscall(15, syscall_execv);
 }

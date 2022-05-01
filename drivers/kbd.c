@@ -202,6 +202,8 @@ uint8_t get_printable_char()
     // Pitfall: ascii control characters aren't printable. Need to exclude Carriage Return
     if (isascii(kbd.key) && kbd.key != KBD_KEY_RET && kbd.key != KBD_KEY_INVALID)
     {
+        if (kbd.ctrl)
+            return c;
         c = kbd.key;
         // If the shift key is being held down
         if (kbd.shift) {
@@ -305,6 +307,12 @@ void key_stroke_action()
             case KBD_KEY_F12:
                 proc_buf_write(cur_proc, kbd.key);
                 break;
+            case KBD_KEY_C:
+                if (kbd.ctrl)
+                    if (cur_proc->id != 0)
+                        syscall_exit(0,0,0,0,0,0);
+                    else
+                        print("^C");
             default:
                 break;
         }
