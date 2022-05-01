@@ -220,8 +220,15 @@ SYSCALL0(wait)
 SYSCALL0(exit)
 {
     cur_proc->parent->signals[SIG_WAIT] = 0; // ask its parent to stop waiting
-    proc_destory(cur_proc); // destory proc
-    swtch((int_reg_info*)r); // schedule the next proc to run
+    proc *temp = cur_proc;
+    // schedule the next proc to run
+    cur_proc = cur_proc->next;
+    // restore context
+    proc_load_context(cur_proc, (int_reg_info*)r);
+    // load pdbr
+    vm_mngr_load_pd(cur_proc->pd);
+    // destory proc
+    proc_destory(temp);
     __asm__ volatile ("mov %0, %%eax" :: "r"(((int_reg_info*)r)->eax)); // eax may be altered later prior to line 27
 }
 

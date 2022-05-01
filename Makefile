@@ -5,9 +5,13 @@ FIRST_PROGRAM_NAME		= shell.bin
 FIRST_PROGRAM_BLOCK 	= 262
 FIRST_PROGRAM_BLOCK_CT 	= 2
 
-SECON_PROGRAM_NAME		= testprog.bin
+SECON_PROGRAM_NAME		= testprog1.bin
 SECON_PROGRAM_BLOCK 	= 264
 SECON_PROGRAM_BLOCK_CT	= 1
+
+THIRD_PROGRAM_NAME		= testprog2.bin
+THIRD_PROGRAM_BLOCK 	= 265
+THIRD_PROGRAM_BLOCK_CT	= 1
 
 all: run clean
 
@@ -33,7 +37,7 @@ debug32c: vhd boot_sect.elf kernel.elf
 	qemu-system-i386 -s -S $< &
 	i386-elf-gdb -ex "target extended-remote localhost:1234" \
 				 -ex "symbol-file kernel.elf" \
-				 -ex "add-symbol-file testprog/shell.elf" \
+				 -ex "add-symbol-file testprog/testprog1.elf" \
 
 vhd: boot_sect.bin kernel.bin
 	dd bs=1M if=/dev/zero of=$@ count=512
@@ -43,6 +47,7 @@ vhd: boot_sect.bin kernel.bin
 	make -C ./testprog
 	dd bs=4K if=./testprog/$(FIRST_PROGRAM_NAME) of=vhd seek=$(FIRST_PROGRAM_BLOCK) count=$(FIRST_PROGRAM_BLOCK_CT) conv=notrunc
 	dd bs=4K if=./testprog/$(SECON_PROGRAM_NAME) of=vhd seek=$(SECON_PROGRAM_BLOCK) count=$(SECON_PROGRAM_BLOCK_CT) conv=notrunc
+	dd bs=4K if=./testprog/$(THIRD_PROGRAM_NAME) of=vhd seek=$(THIRD_PROGRAM_BLOCK) count=$(THIRD_PROGRAM_BLOCK_CT) conv=notrunc
 
 kernel.elf: kernel_entry.o $(OBJ)
 	i386-elf-ld -Ttext 0xC0000000 -o $@  $^

@@ -280,7 +280,7 @@ proc* create_proc()
     return child;
 }
 
-void proc_save_context(proc *p, irq_reg_info *r)
+void proc_save_context(proc *p, int_reg_info *r)
 {
     p->con.esp = r->useresp;
     p->con.ebp = r->ebp;
@@ -293,7 +293,7 @@ void proc_save_context(proc *p, irq_reg_info *r)
     p->con.edx = r->edx;
 }
 
-void proc_load_context(proc *p, irq_reg_info *r)
+void proc_load_context(proc *p, int_reg_info *r)
 {
     r->useresp = p->con.esp;
     r->ebp = p->con.ebp;
