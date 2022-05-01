@@ -160,7 +160,7 @@ void shell_execute()
     {
         if (!fork()) // child
             exec(cmdbuf.s + args[0] + 2);
-        for (;;);
+        wait();
         // parent
     }
 }

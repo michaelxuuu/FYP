@@ -53,7 +53,8 @@ SYSCALL3(open, name, attrib, dirent_to_write)
     if (str_cmp("/", (char*)name) == 0)
     {
         *((dirent*)dirent_to_write) = sys_root_dir;
-        __asm__ volatile ("mov $1, %eax; ret;");
+        __asm__ volatile ("mov $1, %eax;");
+        return;
     }
     
     dirent *f = fs_find_in(&(cur_proc->wdir), (char*)name, (uint8_t)attrib);
@@ -62,13 +63,15 @@ SYSCALL3(open, name, attrib, dirent_to_write)
     {
         *((dirent*)dirent_to_write) = *f; // file not found!
         kfree(f);
-        __asm__ volatile ("mov $0, %eax; ret;");
+        __asm__ volatile ("mov $0, %eax;");
+        return;
     }
     else 
     {
         ((dirent*)dirent_to_write)->blockno = 0;
         kfree(f);
-        __asm__ volatile ("mov $1, %eax; ret;");
+        __asm__ volatile ("mov $1, %eax;");
+        return;
     }
 }
 
@@ -90,7 +93,7 @@ SYSCALL1(sbrk, inc)
     for (int i = 0; i < block_ct; i++, ubreak_addr = inc > 0 ? ubreak_addr + 4096 : ubreak_addr - 4096)
         if (inc > 0)
             vm_mngr_higher_kernel_map(cur_proc->pd, ubreak_addr, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
-        else if (ubreak_addr == USER_HEAP_BASE) __asm__ volatile ("mov $0, %eax; ret;"); // Stop freeing heap pages when hitting the heap base
+        else if (ubreak_addr == USER_HEAP_BASE) {__asm__ volatile ("mov $0, %eax;"); return;} // Stop freeing heap pages when hitting the heap base
         else  vm_mngr_higher_kernel_unmap(cur_proc->pd, ubreak_addr - 1);
 
     cur_proc->brk_addr = ubreak_addr;
@@ -160,7 +163,7 @@ SYSCALL3(readdir, dir, index, dirent_to_wtite)// call open to get dirent first t
 
 SYSCALL1(make_dir, name)
 {
-    if (fs_add_dir_at(&cur_proc->wdir, (char *)name)) __asm__ volatile ("mov $1, %eax; ret;");
+    if (fs_add_dir_at(&cur_proc->wdir, (char *)name)) {__asm__ volatile ("mov $1, %eax;"); return;}
     else __asm__ volatile ("mov $0, %eax;");
 }
 
@@ -169,7 +172,8 @@ SYSCALL1(change_dir, name)
     if (str_cmp("/", (char*)name) == 0)
     {
         cur_proc->wdir = sys_root_dir;
-        __asm__ volatile ("mov $1, %eax; ret;");
+        __asm__ volatile ("mov $1, %eax;");
+        return;
     }
 
     dirent *e = fs_find_in(&cur_proc->wdir, (char*)name, DIRENT_ATTRIB_DIR | DIRENT_ATTRIB_USED);
@@ -177,7 +181,8 @@ SYSCALL1(change_dir, name)
     {
         cur_proc->wdir = *e;
         kfree(e);
-        __asm__ volatile ("mov $1, %eax; ret;");
+        __asm__ volatile ("mov $1, %eax;");
+        return;
     }
     else __asm__ volatile ("mov $0, %eax;");
 }
@@ -199,6 +204,13 @@ SYSCALL1(exec, p)
     ((int_reg_info*)r)->esp = 0xbffffff8;
 }
 
+SYSCALL0(wait)
+{
+    cur_proc->signals[SIG_WAIT] = 1;
+    swtch(r);
+    __asm__ volatile ("mov %0, %%eax" :: "r"(((int_reg_info*)r)->eax));
+}
+
 void syscall_init()
 {
     register_handler(128, syscall_handler);
@@ -215,4 +227,5 @@ void syscall_init()
     register_syscall(10, syscall_change_dir);
     register_syscall(11, syscall_fork);
     register_syscall(12, syscall_exec);
+    register_syscall(13, syscall_wait);
 }

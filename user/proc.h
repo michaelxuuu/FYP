@@ -37,6 +37,10 @@ typedef struct proc_inbuf
     int data[64];
 } proc_inbuf;
 
+#define SIG_WAIT 0
+#define SIG_INT  1
+#define SIG_NUM  2
+
 // This proc struct is managed by the kernel
 typedef struct proc proc;
 typedef struct proc
@@ -47,6 +51,7 @@ typedef struct proc
     proc *parent;   // parent proc
     dirent wdir;
     uint32_t brk_addr;
+    int signals[2];
 
     proc_inbuf inbuf;
     proc *next;

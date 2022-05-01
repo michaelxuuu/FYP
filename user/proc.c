@@ -86,6 +86,50 @@ void proc_init()
     goto_user();
 }
 
+void proc_alloc_stack(proc *child)
+{
+    uint32_t *cpd = vm_mngr_map_frame(child->pd);
+    uint32_t stack_va = 0xC0000000 - 0x1000;
+    uint32_t stack_dir_index = va_get_dir_index(stack_va);
+    uint32_t stack_page_index = va_get_page_index(stack_va);
+
+    // get parent proc's stack
+    uint32_t *pt = vm_mngr_map_frame(page_get_frame_addr(cpd[stack_dir_index])); // now cpd (child page dir) is the same to ppd (paren page dir)
+    uint32_t *paren_stack = vm_mngr_map_frame(pt[stack_page_index]);
+
+    // unlink the parent proc's stack physical frame from the child page directory
+    cpd[stack_dir_index] = 0;
+
+    // allocate a new page for the child stack
+    uint32_t child_stack_pa = pm_mngr_alloc_block();
+    vm_mngr_higher_kernel_map(child->pd, stack_va, child_stack_pa, PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+    uint32_t *child_stack = vm_mngr_map_frame(child_stack_pa);
+
+    // copy the parent proc's stack to the child
+    mem_copy((char*)paren_stack, (char*)child_stack, 4096);
+    
+    vm_mngr_unmap_frame(cpd);
+    vm_mngr_unmap_frame(pt);
+    vm_mngr_unmap_frame(child_stack);
+    vm_mngr_unmap_frame(paren_stack);
+}
+
+void proc_alloc_text(proc *child)
+{
+    uint32_t *pd = vm_mngr_map_frame(child->pd);
+
+    // unlink the parent proc's text physical frame from the child page directory
+    pd[0] = 0;
+
+    // allocate a new page for the child text
+    for (int i = 0; i < 4; i++) {
+        invalidate_tlb_ent(i * 4096);
+        vm_mngr_higher_kernel_map(child->pd, i * 4096, pm_mngr_alloc_block(), PAGE_PRESENT | PAGE_WRITABLE | PAGE_USER);
+    }
+
+    vm_mngr_unmap_frame(pd);
+}
+
 // pt is inherited from the parent proc... which is the currently running proc
 void proc_alloc_pt(proc *child)
 {
@@ -131,8 +175,10 @@ int proc_load_text(proc *p, char* path)
 {
     dirent *e = fs_find(path, DIRENT_ATTRIB_USED);
     if (!e)
-        return 0;
+        return 0; // exec failed
     
+    // clear old text
+    proc_alloc_text(cur_proc);
     for (uint32_t blockno = e->blockno, add_to_wirte = 0x0; blockno != 0; blockno = fat_get_next(blockno), add_to_wirte += 4096)
     {
         buf *b = bread(blockno);
@@ -181,13 +227,23 @@ void proc_brk_init(proc *p)
     p->brk_addr = 0x4000;
 }
 
+void proc_sig_init(proc *p)
+{
+    for (int i = 0; i < SIG_NUM; i++)
+        p->signals[i] = 0;
+}
+
 proc* create_proc()
 {
     proc *child = (proc*)kmalloc(sizeof(proc));
     proc_assign_paren(child);
-    if (pq->proc_ct) // first proc use the kernel pt, no copying stack but alloc a 4K user stack space
+    if (pq->proc_ct)
+    {
         proc_alloc_pt(child);
-    else
+        proc_alloc_stack(child);
+        child->wdir = child->parent->wdir;
+    }
+    else // first proc use the kernel pt, no copying stack but alloc a 4K user stack space
     {
         child->pd = KERNEL_PD_BASE;
         child->wdir = sys_root_dir;
@@ -197,6 +253,7 @@ proc* create_proc()
     else proc_set_context(child);
     proc_brk_init(child);
     proc_buf_init(child);
+    proc_sig_init(child);
     link_proc(child);
     if (!pq->proc_ct)
         proc_load_text(child, "/shell.bin");
@@ -234,7 +291,7 @@ void swtch(irq_reg_info *r)
 {
     if (!cur_proc)
         return;
-    if (cur_proc->id == 1)
+    if (cur_proc->next->signals[SIG_WAIT]) // if the next proc is waiting on its child proc
         return;
     // save current
     proc_save_context(cur_proc, r);
