@@ -115,57 +115,54 @@ void shebang() {
 
 void shell_execute()
 {
-    int args[10];
+    char* args[10];
+    mem_set(args, 0, sizeof(args));
+
     int argct = 0;
 
     for (int i = 0; cmdbuf.s[i]; i++)
     {
         if (cmdbuf.s[i] == ' ')
             cmdbuf.s[i] = 0;
-        else if ((i == 0) | cmdbuf.s[i-1] == 0)
+        else if (i == 0 || cmdbuf.s[i-1] == 0)
         {
-            args[argct] = i;
+            args[argct] = cmdbuf.s + i;
             argct++;
         }
     }
     argct--;
 
-    if(str_cmp("ls", cmdbuf.s + args[0]) == 0) 
+    if(str_cmp("ls", args[0]) == 0) 
     {   
         if (!argct)
             ls(".");
         else 
-            ls(cmdbuf.s + args[1]);
+            ls(args[1]);
     }
-    else if (str_cmp("cd", cmdbuf.s + args[0]) == 0)
+    else if (str_cmp("cd", args[0]) == 0)
     {
         if (!argct)
             cd(".");
         else 
-            cd(cmdbuf.s + args[1]);
+            cd(args[1]);
     }
-    else if (str_cmp("mkdir", cmdbuf.s + args[0]) == 0)
+    else if (str_cmp("mkdir", args[0]) == 0)
     {
         if (!argct)
             printf("Dir name missing!\n");
         else 
-            make_dir(cmdbuf.s + args[1]);
+            make_dir(args[1]);
     }
-    else if (str_cmp("clear", cmdbuf.s + args[0]) == 0) 
+    else if (str_cmp("clear", args[0]) == 0) 
         clear_screen();
-    else if (cmdbuf.s[args[0]] == '.' && cmdbuf.s[args[0] + 1] == '/')
+    else if (args[0][0] == '.' && args[0][1] == '/')
     {
         if (!fork()) // child
         {
             if (!argct) // no args
-                exec(cmdbuf.s + args[0] + 2);
+                exec(args[0] + 2);
             else
-            {
-                char* argps[10];
-                for (int i = 1; i < argct + 1; i++)
-                    argps[i-1] = cmdbuf.s + args[i];
-                execv(cmdbuf.s + args[0] + 2, argps);
-            }
+                execv(args[0] + 2, args + 1);
         }
         wait();
         // parent

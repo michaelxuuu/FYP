@@ -197,7 +197,7 @@ SYSCALL1(exec, p)
     if(!proc_load_text(cur_proc, (char*)p))
         kprintf("exec failed: %s not found\n", p);
     // update parent context
-    ((int_reg_info*)r)->eip = 0;
+    ((int_reg_info*)r)->eip = 0x1000;
     ((int_reg_info*)r)->esp = 0xbffffff4;
 }
 
@@ -237,19 +237,19 @@ SYSCALL2(execv, p, argl)
         kprintf("exec failed: %s not found\n", p);
         
     // get and args
-    char **argv = (char**)0x3000;
-    uint32_t *argp = (uint32_t*)0x3000 + 10;
+    char **argv = (char**)0x0;
+    char *argp = (char*)0xA;
     int i = 0;
     for (i = 0; temp[i]; i++, argp += (str_len(temp[i]) + 1))
     {
-        mem_copy(temp[i], (char*)argp, str_len(temp[i]) + 1);
-        argv[i] = (char*)argp;
+        mem_copy(temp[i], argp, str_len(temp[i]) + 1);
+        argv[i] = argp;
     }
     
-    *((uint32_t*)(0xC0000000 - 4)) = 0x3000; // argv
+    *((uint32_t*)(0xC0000000 - 4)) = 0x0; // argv
     *((uint32_t*)(0xC0000000 - 8)) = i; // argc
     // update parent context
-    ((int_reg_info*)r)->eip = 0;
+    ((int_reg_info*)r)->eip = 0x1000;
     ((int_reg_info*)r)->useresp = 0xbffffff4;
 }
 

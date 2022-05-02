@@ -142,7 +142,7 @@ void goto_user()
 		"or $3, %eax;"
 		"pushl %eax;"
 		// push eip which is the eip we had before the pretend interrupt in the user mode (we set it to a known place - the entry point to the first proc)
-		"pushl $0x0;"
+		"pushl $0x1000;"
 		"iret;"
 	);
 }

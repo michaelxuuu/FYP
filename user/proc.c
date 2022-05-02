@@ -198,7 +198,7 @@ int proc_load_text(proc *p, char* path)
     
     // clear old text
     proc_alloc_text(cur_proc);
-    for (uint32_t blockno = e->blockno, add_to_wirte = 0x0; blockno != 0; blockno = fat_get_next(blockno), add_to_wirte += 4096)
+    for (uint32_t blockno = e->blockno, add_to_wirte = 0x1000; blockno != 0; blockno = fat_get_next(blockno), add_to_wirte += 4096)
     {
         buf *b = bread(blockno);
         mem_copy(b->data, (char*)add_to_wirte, 4096);
