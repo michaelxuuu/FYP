@@ -126,9 +126,10 @@ void fs_init()
     ata_write_sectors((char*)magic, MAGIC_SECTNO, 1);
 
     // add a file
-    fs_add_file_at(&sys_root_dir, "shell.bin", DIRENT_ATTRIB_USED, 2);
-    fs_add_file_at(&sys_root_dir, "testprog1.bin", DIRENT_ATTRIB_USED, 1);
-    fs_add_file_at(&sys_root_dir, "testprog2.bin", DIRENT_ATTRIB_USED, 1);
+    fs_add_file_at(&sys_root_dir, "shell", DIRENT_ATTRIB_USED, 2);
+    fs_add_file_at(&sys_root_dir, "echo", DIRENT_ATTRIB_USED, 1);
+    fs_add_file_at(&sys_root_dir, "cat", DIRENT_ATTRIB_USED, 2);
+    fs_add_file_at(&sys_root_dir, "bad", DIRENT_ATTRIB_USED, 1);
 }
 
 /* -------------------------------Funstions that help manage the free space------------------------------- */

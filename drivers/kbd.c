@@ -122,7 +122,7 @@ void ps2_controller_send_data(uint8_t data)
     port_byte_out(PS2_CONTROLLER_PORT_DATA, data);
 }
 
-void kbd_callback()
+void kbd_callback(irq_reg_info *r)
 {
     int make_code;
 
@@ -192,7 +192,7 @@ void kbd_callback()
             }
         }
     }
-    key_stroke_action();
+    key_stroke_action(r);
 }
 
 uint8_t get_printable_char()
@@ -270,7 +270,7 @@ uint8_t get_printable_char()
 }
 
 // Actiuon required only for keydown
-void key_stroke_action()
+void key_stroke_action(irq_reg_info *r)
 {
     if (!kbd.down && kbd.key != KBD_KEY_INVALID)
         return;
@@ -310,9 +310,9 @@ void key_stroke_action()
             case KBD_KEY_C:
                 if (kbd.ctrl)
                     if (cur_proc->id != 0)
-                        syscall_exit(0,0,0,0,0,0);
+                        syscall_exit(0,0,0,0,0,(int)r);
                     else
-                        print("^C");
+                        print("^[[C");
             default:
                 break;
         }

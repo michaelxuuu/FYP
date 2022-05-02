@@ -61,7 +61,7 @@ typedef struct kbd_state
 
 extern kbd_state kbd;
 
-void kbd_callback();
+void kbd_callback(irq_reg_info *r);
 
 void keyboard_init();
 
@@ -180,6 +180,6 @@ extern int scan_code_map[]; // Map a particular make code to a key
  */
 uint8_t get_printable_char();
 
-void key_stroke_action(); // Ttanslates a key stroke to certain actions shown on the screen, such as printing/ deleting a character
+void key_stroke_action(irq_reg_info *r); // Ttanslates a key stroke to certain actions shown on the screen, such as printing/ deleting a character
 
 #endif

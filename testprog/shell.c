@@ -177,7 +177,7 @@ void key_stroke_action(int key)
     {
         case KBD_KEY_TAB:
             printf("    ");
-            key_char(' '); // tab becomes a single space char
+            key_char(' '); // tab becomes a single space
             break;
         case KBD_KEY_BACKSPACE:
             key_delete();

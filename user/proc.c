@@ -275,7 +275,7 @@ proc* create_proc()
     proc_sig_init(child);
     link_proc(child);
     if (!pq->proc_ct)
-        proc_load_text(child, "/shell.bin");
+        proc_load_text(child, "shell");
     pq->proc_ct++;
     return child;
 }
